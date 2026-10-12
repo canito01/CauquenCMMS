@@ -612,7 +612,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                     children: const [
                       Text(
                         'Administración de Personal & Cuadrillas',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                       ),
                       SizedBox(height: 4),
                       Text(
@@ -634,15 +634,15 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
                         ),
                       ),
-                      ElevatedButton.icon(
+                      OutlinedButton.icon(
                         onPressed: () => _showCrewDialog(),
-                        icon: const Icon(Icons.group_add, size: 16),
-                        label: const Text('ARMAR NUEVA CUADRILLA'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.warning,
-                          foregroundColor: Colors.black,
+                        icon: const Icon(Icons.group_add, size: 16, color: AppColors.primary),
+                        label: const Text('ARMAR NUEVA CUADRILLA', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.border),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
@@ -766,7 +766,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                                   user.crewName ?? 'Sin cuadrilla',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: user.crewName != null ? Colors.white : AppColors.textMuted,
+                                    color: user.crewName != null ? AppColors.textPrimary : AppColors.textMuted,
                                     fontWeight: user.crewName != null ? FontWeight.w600 : FontWeight.normal,
                                   ),
                                 ),
@@ -846,7 +846,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: AppColors.border),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4)),
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2)),
                             ],
                           ),
                           child: Column(
@@ -858,7 +858,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                                   Expanded(
                                     child: Text(
                                       crew.name,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white),
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -911,7 +911,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                                   const SizedBox(width: 6),
                                   Text(
                                     'Líder: ${crew.leaderName} (${crew.leaderBadge})',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                                   ),
                                 ],
                               ),

@@ -22,6 +22,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
   String _protocolSearchQuery = '';
   WorkOrderStatus? _statusFilter;
   WorkOrderPriority? _priorityFilter;
+  String? _selectedOrderId;
 
   @override
   void initState() {
@@ -526,7 +527,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Cargar Protocolo desde Plantilla Predefinida', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                                    Text('Cargar Protocolo desde Plantilla Predefinida', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
                                     Text('Autocompleta título, prioridad y todos los pasos técnicos', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                   ],
                                 ),
@@ -954,314 +955,510 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     );
   }
 
-  // --- Modal de Detalle e Inspección con botón de PDF y Gestión de Pasos ---
-  void _showOrderDetailModal(BuildContext context, WorkOrderModel initialOrder) {
-    WorkOrderModel currentOrder = initialOrder;
+  // --- MaintainX Slide-Over / Split-View Lateral Detail Panel ---
+  Widget _buildLateralDetailPanel(WorkOrderModel order, BuildContext context) {
+    final statusColor = order.status == WorkOrderStatus.finalizada
+        ? AppColors.success
+        : (order.status == WorkOrderStatus.enProceso
+            ? AppColors.warning
+            : (order.status == WorkOrderStatus.pausada ? AppColors.paused : AppColors.textSecondary));
+    final statusBg = order.status == WorkOrderStatus.finalizada
+        ? AppColors.successContainer
+        : (order.status == WorkOrderStatus.enProceso
+            ? AppColors.warningContainer
+            : (order.status == WorkOrderStatus.pausada ? AppColors.pausedContainer : AppColors.surfaceElevated));
 
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            return Dialog(
-              backgroundColor: AppColors.surface,
-              insetPadding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 820, maxHeight: 880),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+    final isUrgent = order.priority == WorkOrderPriority.urgente;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(left: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header del Panel Lateral
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            order.orderNumber,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusBg,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            order.status.name.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                        if (isUrgent) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.dangerContainer,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.error_outline, size: 12, color: AppColors.danger),
+                                SizedBox(width: 4),
+                                Text(
+                                  'PARADA / CRÍTICA',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.danger,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                      hoverColor: AppColors.surfaceSecondary,
+                      splashRadius: 18,
+                      tooltip: 'Cerrar panel lateral',
+                      onPressed: () => setState(() => _selectedOrderId = null),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  order.title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.precision_manufacturing, size: 14, color: AppColors.textMuted),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${order.asset.code} • ${order.asset.name} (${order.asset.location})',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Botones de Acción Rápidos
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _handleDownloadPdf(context, order),
+                        icon: const Icon(Icons.picture_as_pdf, size: 15),
+                        label: const Text('Descargar Informe PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _showCreateOrderDialog(context, orderToEdit: order),
+                      icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.textPrimary),
+                      label: const Text('Editar', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        side: const BorderSide(color: AppColors.border),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                      tooltip: 'Eliminar orden',
+                      onPressed: () => _confirmDeleteOrder(order),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Cuerpo con Scroll
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Resumen 2x2
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Expanded(
+                            child: _buildSideMetaItem(
+                              'TÉCNICO ASIGNADO',
+                              order.technicianName,
+                              subtitle: order.technicianBadge,
+                              icon: Icons.person_outline,
+                            ),
+                          ),
+                          Container(width: 1, height: 36, color: AppColors.border),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildSideMetaItem(
+                              'CUADRILLA',
+                              order.assignedCrew ?? 'Asignación Individual',
+                              icon: Icons.group_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20, thickness: 1, color: AppColors.border),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSideMetaItem(
+                              'TIPO DE ORDEN',
+                              order.type.name.toUpperCase(),
+                              icon: Icons.category_outlined,
+                            ),
+                          ),
+                          Container(width: 1, height: 36, color: AppColors.border),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildSideMetaItem(
+                              'PRIORIDAD',
+                              order.priority.name.toUpperCase(),
+                              icon: Icons.flag_outlined,
+                              textColor: isUrgent ? AppColors.danger : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Pasos y Checklist del Protocolo Técnico
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Protocolo Técnico (${order.checklist.length} pasos)',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${order.completedTasksCount}/${order.totalTasksCount} completados (${(order.progressPercentage * 100).toInt()}%)',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final newStep = await _showAddStepDialog(context);
+                        if (newStep != null) {
+                          final updatedSteps = List<ChecklistItemModel>.from(order.checklist)..add(newStep);
+                          final updatedOrder = order.copyWith(
+                            checklist: updatedSteps,
+                            updatedAt: DateTime.now(),
+                          );
+                          await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Paso "${newStep.title}" agregado al protocolo'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.add, size: 14, color: AppColors.primary),
+                      label: const Text('Agregar Paso', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        side: const BorderSide(color: AppColors.border),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: order.totalTasksCount == 0 ? 0 : order.completedTasksCount / order.totalTasksCount,
+                    backgroundColor: AppColors.surfaceElevated,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      order.status == WorkOrderStatus.finalizada ? AppColors.success : AppColors.primary,
+                    ),
+                    minHeight: 6,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                if (order.checklist.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: const Center(
+                      child: Text('No hay pasos configurados para este protocolo.', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    ),
+                  )
+                else
+                  ...order.checklist.asMap().entries.map((entry) {
+                    final idx = entry.key + 1;
+                    final item = entry.value;
+
+                    String stepTypeLabel = 'Inspección Sí/No';
+                    if (item.type == ChecklistItemType.numericMeasurement) {
+                      stepTypeLabel = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
+                    } else if (item.type == ChecklistItemType.photoRequired) {
+                      stepTypeLabel = 'Evidencia fotográfica obligatoria';
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 12,
+                            backgroundColor: item.isCompleted ? AppColors.successContainer : AppColors.primaryContainer,
+                            child: item.isCompleted
+                                ? const Icon(Icons.check, size: 14, color: AppColors.success)
+                                : Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        currentOrder.orderNumber,
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        currentOrder.title,
-                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Activo: ${currentOrder.asset.code} • ${currentOrder.asset.name} • ${currentOrder.asset.location}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                ),
+                                Text(item.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Row(
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  _showCreateOrderDialog(context, orderToEdit: currentOrder);
-                                },
-                                icon: const Icon(Icons.edit, size: 15, color: Colors.white),
-                                label: const Text('MODIFICAR TAREA', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: AppColors.border),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
+                          if (item.numericValue != null)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryContainer,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                               ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => _handleDownloadPdf(context, currentOrder),
-                                icon: const Icon(Icons.picture_as_pdf, size: 16),
-                                label: const Text('DESCARGAR PDF OFICIAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
+                              child: Text(
+                                '${item.numericValue} ${item.unit ?? ""}',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                            ],
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.textSecondary),
+                            splashRadius: 16,
+                            tooltip: 'Modificar paso',
+                            onPressed: () async {
+                              final edited = await _showAddStepDialog(context, initialStep: item);
+                              if (edited != null) {
+                                final updatedSteps = List<ChecklistItemModel>.from(order.checklist);
+                                final sIdx = updatedSteps.indexWhere((s) => s.id == item.id);
+                                if (sIdx >= 0) {
+                                  updatedSteps[sIdx] = edited;
+                                  final updatedOrder = order.copyWith(
+                                    checklist: updatedSteps,
+                                    updatedAt: DateTime.now(),
+                                  );
+                                  await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                }
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 15, color: AppColors.danger),
+                            splashRadius: 16,
+                            tooltip: 'Eliminar paso',
+                            onPressed: () async {
+                              final updatedSteps = order.checklist.where((s) => s.id != item.id).toList();
+                              final updatedOrder = order.copyWith(
+                                checklist: updatedSteps,
+                                updatedAt: DateTime.now(),
+                              );
+                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                            },
                           ),
                         ],
                       ),
-                      const Divider(height: 24),
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            Row(
-                              children: [
-                                _buildInfoChip('Responsable', '${currentOrder.technicianName} (${currentOrder.technicianBadge})'),
-                                const SizedBox(width: 12),
-                                _buildInfoChip('Cuadrilla', currentOrder.assignedCrew ?? 'Asignación Individual'),
-                                const SizedBox(width: 12),
-                                _buildInfoChip('Prioridad', currentOrder.priority.name.toUpperCase()),
-                                const SizedBox(width: 12),
-                                _buildInfoChip('Estado', currentOrder.status.name.toUpperCase()),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
+                    );
+                  }),
 
-                            // Protocolo y Pasos Técnicos con Botón Agregar Paso
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Protocolo y Pasos Técnicos (${currentOrder.checklist.length}):',
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                                ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final newStep = await _showAddStepDialog(context);
-                                    if (newStep != null) {
-                                      final updatedSteps = List<ChecklistItemModel>.from(currentOrder.checklist)..add(newStep);
-                                      final updatedOrder = currentOrder.copyWith(
-                                        checklist: updatedSteps,
-                                        updatedAt: DateTime.now(),
-                                      );
-                                      await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                                      setModalState(() {
-                                        currentOrder = updatedOrder;
-                                      });
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Paso "${newStep.title}" agregado a la orden.'),
-                                            backgroundColor: AppColors.success,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  icon: const Icon(Icons.add_circle, size: 16),
-                                  label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
+                if (order.spareParts.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Repuestos Utilizados:',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: order.spareParts.map((p) {
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.build_circle_outlined, size: 18, color: AppColors.primary),
+                          title: Text('${p.code} - ${p.description}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                          trailing: Text('${p.consumedQuantity} ${p.unit}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
 
-                            if (currentOrder.checklist.isEmpty)
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceElevated,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Text('No hay pasos configurados. Usa "Agregar Paso" para incluir procedimientos.', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                                ),
-                              )
-                            else
-                              ...currentOrder.checklist.asMap().entries.map((entry) {
-                                final idx = entry.key + 1;
-                                final item = entry.value;
-
-                                String stepTypeLabel = 'Inspección Sí/No';
-                                if (item.type == ChecklistItemType.numericMeasurement) {
-                                  stepTypeLabel = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
-                                } else if (item.type == ChecklistItemType.photoRequired) {
-                                  stepTypeLabel = 'Evidencia fotográfica obligatoria';
-                                }
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 6),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceElevated,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 12,
-                                        backgroundColor: item.isCompleted ? AppColors.success.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.2),
-                                        child: item.isCompleted
-                                            ? const Icon(Icons.check, size: 14, color: AppColors.success)
-                                            : Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(item.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                            Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                                          ],
-                                        ),
-                                      ),
-                                      if (item.numericValue != null)
-                                        Container(
-                                          margin: const EdgeInsets.only(right: 8),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
-                                          child: Text('${item.numericValue} ${item.unit ?? ""}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                        ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
-                                        tooltip: 'Modificar este paso',
-                                        onPressed: () async {
-                                          final edited = await _showAddStepDialog(context, initialStep: item);
-                                          if (edited != null) {
-                                            final updatedSteps = List<ChecklistItemModel>.from(currentOrder.checklist);
-                                            final stepIdx = updatedSteps.indexWhere((s) => s.id == item.id);
-                                            if (stepIdx >= 0) {
-                                              updatedSteps[stepIdx] = edited;
-                                              final updatedOrder = currentOrder.copyWith(
-                                                checklist: updatedSteps,
-                                                updatedAt: DateTime.now(),
-                                              );
-                                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                                              setModalState(() {
-                                                currentOrder = updatedOrder;
-                                              });
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Paso "${edited.title}" actualizado con éxito.'), backgroundColor: AppColors.success),
-                                                );
-                                              }
-                                            }
-                                          }
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                                        tooltip: 'Eliminar este paso de la tarea',
-                                        onPressed: () async {
-                                          final updatedSteps = currentOrder.checklist.where((s) => s.id != item.id).toList();
-                                          final updatedOrder = currentOrder.copyWith(
-                                            checklist: updatedSteps,
-                                            updatedAt: DateTime.now(),
-                                          );
-                                          await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                                          setModalState(() {
-                                            currentOrder = updatedOrder;
-                                          });
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Paso "${item.title}" eliminado de la orden.'), backgroundColor: AppColors.danger),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-
-                        const SizedBox(height: 16),
-                        if (currentOrder.spareParts.isNotEmpty) ...[
-                          const Text('Repuestos Utilizados:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const SizedBox(height: 8),
-                          ...currentOrder.spareParts.map((p) => ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.build, size: 18, color: AppColors.primary),
-                                title: Text('${p.code} - ${p.description}', style: const TextStyle(fontSize: 12)),
-                                trailing: Text('${p.consumedQuantity} ${p.unit}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              )),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (currentOrder.status == WorkOrderStatus.finalizada) ...[
-                          const Text('Diagnóstico de Cierre & Causa Raíz:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                          const SizedBox(height: 4),
-                          Text(currentOrder.rootCause ?? 'Desgaste mecánico operativo normal por horas de funcionamiento.', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.success)),
-                          const SizedBox(height: 8),
-                          const Text('Observaciones Técnicas:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                          const SizedBox(height: 4),
-                          Text(currentOrder.technicianNotes ?? 'Trabajo ejecutado según especificaciones de ingeniería. Equipo entregado 100% operativo.', style: const TextStyle(fontSize: 13, color: Colors.white)),
+                if (order.status == WorkOrderStatus.finalizada) ...[
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.successContainer.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.check_circle, size: 16, color: AppColors.success),
+                            SizedBox(width: 6),
+                            Text('Cierre de Orden & Causa Raíz', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          order.rootCause ?? 'Desgaste operativo normal por horas de servicio.',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        ),
+                        if (order.technicianNotes != null && order.technicianNotes!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Observaciones: ${order.technicianNotes}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          ),
                         ],
                       ],
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
-  },
-);
-}
+  }
 
-  Widget _buildInfoChip(String label, String value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.border)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildSideMetaItem(String label, String value, {String? subtitle, required IconData icon, Color? textColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-            const SizedBox(height: 2),
-            Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Icon(icon, size: 11, color: AppColors.textMuted),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.textMuted),
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor ?? AppColors.textPrimary),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (subtitle != null)
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
     );
   }
 
@@ -1286,22 +1483,28 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
 
     return Column(
       children: [
-        // Selector de Pestañas Principal
+        // Selector de Pestañas Principal (MaintainX Clean TabBar)
         Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+          ),
           child: TabBar(
             controller: _tabController,
             indicatorColor: AppColors.primary,
+            indicatorWeight: 3,
             labelColor: AppColors.primary,
+            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             tabs: [
               Tab(
-                icon: const Icon(Icons.assignment_outlined),
+                icon: const Icon(Icons.assignment_outlined, size: 18),
                 text: 'Órdenes de Trabajo Despachadas (${filtered.length})',
               ),
               Tab(
-                icon: const Icon(Icons.rule),
+                icon: const Icon(Icons.rule, size: 18),
                 text: 'Protocolos Técnicos & Plantillas Maestras (${templates.length})',
               ),
             ],
@@ -1320,11 +1523,23 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     );
   }
 
-  // --- Pestaña 1: Órdenes de Trabajo Despachadas ---
+  // --- Pestaña 1: Órdenes de Trabajo Despachadas (MaintainX Split-View) ---
   Widget _buildWorkOrdersTab(List<WorkOrderModel> filtered, BuildContext context) {
-    return ListView(
+    final allOrders = ref.watch(workOrdersProvider);
+    WorkOrderModel? selectedOrder;
+    if (_selectedOrderId != null) {
+      for (final o in allOrders) {
+        if (o.id == _selectedOrderId) {
+          selectedOrder = o;
+          break;
+        }
+      }
+    }
+
+    final listViewContent = ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        // Encabezado y Acción Principal
         Wrap(
           alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -1334,37 +1549,51 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Gestión y Despacho de Órdenes de Trabajo', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+                const Text(
+                  'Gestión y Despacho de Órdenes',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
+                ),
                 const SizedBox(height: 4),
-                Text('${filtered.length} órdenes encontradas en el sistema', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                Text(
+                  '${filtered.length} órdenes encontradas • Haz clic en una fila para desplegar el panel de inspección',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
               ],
             ),
             ElevatedButton.icon(
               onPressed: () => _showCreateOrderDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('NUEVA ORDEN DE TRABAJO'),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('NUEVA ORDEN DE TRABAJO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
-        // Barra de Búsqueda y Filtros
+        // Barra de Búsqueda y Filtros Rápidos
         Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
                 decoration: const InputDecoration(
-                  hintText: 'Buscar por OT, descripción, técnico, cuadrilla o código de activo...',
-                  prefixIcon: Icon(Icons.search, size: 20, color: AppColors.primary),
+                  hintText: 'Buscar por OT, equipo, técnico, cuadrilla o descripción...',
+                  prefixIcon: Icon(Icons.search, size: 18, color: AppColors.primary),
                   isDense: true,
+                  filled: true,
+                  fillColor: AppColors.surfaceLight,
                 ),
                 onChanged: (val) => setState(() => _searchQuery = val),
               ),
@@ -1373,69 +1602,131 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    const Text('Estado: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    const Text('Estado: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                     const SizedBox(width: 8),
                     _buildFilterChip('Todos', null, _statusFilter, (val) => setState(() => _statusFilter = val)),
                     _buildFilterChip('Pendiente', WorkOrderStatus.pendiente, _statusFilter, (val) => setState(() => _statusFilter = val)),
                     _buildFilterChip('En Proceso', WorkOrderStatus.enProceso, _statusFilter, (val) => setState(() => _statusFilter = val)),
                     _buildFilterChip('Pausada', WorkOrderStatus.pausada, _statusFilter, (val) => setState(() => _statusFilter = val)),
                     _buildFilterChip('Finalizada', WorkOrderStatus.finalizada, _statusFilter, (val) => setState(() => _statusFilter = val)),
+                    const SizedBox(width: 16),
+                    Container(width: 1, height: 20, color: AppColors.border),
+                    const SizedBox(width: 16),
+                    const Text('Prioridad: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Todas', null, _priorityFilter, (val) => setState(() => _priorityFilter = val)),
+                    _buildFilterChip('Urgente', WorkOrderPriority.urgente, _priorityFilter, (val) => setState(() => _priorityFilter = val)),
+                    _buildFilterChip('Normal', WorkOrderPriority.normal, _priorityFilter, (val) => setState(() => _priorityFilter = val)),
                   ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // Tabla de Órdenes de Trabajo
+        // Tabla de Órdenes de Trabajo (MaintainX Clean Minimalist SaaS Table)
         Container(
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
+              showCheckboxColumn: false,
+              headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+              dataRowMinHeight: 52,
+              dataRowMaxHeight: 56,
               columns: const [
-                DataColumn(label: Text('Nº OT', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Título & Equipo', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Tipo', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Prioridad', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Destinatario (Técnico / Cuadrilla)', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Progreso & Pasos', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Acciones & Informe', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Nº OT')),
+                DataColumn(label: Text('TÍTULO & EQUIPO')),
+                DataColumn(label: Text('TIPO')),
+                DataColumn(label: Text('PRIORIDAD')),
+                DataColumn(label: Text('DESTINATARIO')),
+                DataColumn(label: Text('PROGRESO')),
+                DataColumn(label: Text('ESTADO')),
+                DataColumn(label: Text('ACCIONES')),
               ],
               rows: filtered.map((order) {
+                final isSelectedRow = order.id == _selectedOrderId;
+                final isUrgent = order.priority == WorkOrderPriority.urgente;
+
                 final statusColor = order.status == WorkOrderStatus.finalizada
                     ? AppColors.success
-                    : (order.status == WorkOrderStatus.enProceso ? AppColors.warning : AppColors.textSecondary);
+                    : (order.status == WorkOrderStatus.enProceso
+                        ? AppColors.warning
+                        : (order.status == WorkOrderStatus.pausada ? AppColors.paused : AppColors.textSecondary));
+                final statusBg = order.status == WorkOrderStatus.finalizada
+                    ? AppColors.successContainer
+                    : (order.status == WorkOrderStatus.enProceso
+                        ? AppColors.warningContainer
+                        : (order.status == WorkOrderStatus.pausada ? AppColors.pausedContainer : AppColors.surfaceElevated));
 
                 return DataRow(
-                  onSelectChanged: (_) => _showOrderDetailModal(context, order),
+                  selected: isSelectedRow,
+                  color: WidgetStateProperty.resolveWith<Color?>((states) {
+                    if (isSelectedRow) return AppColors.primaryContainer.withValues(alpha: 0.7);
+                    if (states.contains(WidgetState.hovered)) return AppColors.surfaceLight;
+                    return null;
+                  }),
+                  onSelectChanged: (_) {
+                    setState(() {
+                      if (_selectedOrderId == order.id) {
+                        _selectedOrderId = null;
+                      } else {
+                        _selectedOrderId = order.id;
+                      }
+                    });
+                  },
                   cells: [
-                    DataCell(Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                    DataCell(
+                      Text(
+                        order.orderNumber,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: isSelectedRow ? AppColors.primary : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
                     DataCell(
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(order.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text('${order.asset.code} • ${order.asset.name}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                          Text(
+                            order.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${order.asset.code} • ${order.asset.name}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          ),
                         ],
                       ),
                     ),
-                    DataCell(Text(order.type.name.toUpperCase(), style: const TextStyle(fontSize: 11))),
+                    DataCell(Text(order.type.name.toUpperCase(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
                     DataCell(
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: order.priority == WorkOrderPriority.urgente ? AppColors.danger.withValues(alpha: 0.2) : AppColors.surfaceElevated,
+                          color: isUrgent ? AppColors.dangerContainer : AppColors.surfaceSecondary,
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: isUrgent ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
                         ),
                         child: Text(
                           order.priority.name.toUpperCase(),
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: order.priority == WorkOrderPriority.urgente ? AppColors.danger : Colors.white),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: isUrgent ? AppColors.danger : AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     ),
@@ -1444,59 +1735,69 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(order.technicianName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(order.technicianName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                           if (order.assignedCrew != null)
-                            Text(order.assignedCrew!, style: const TextStyle(fontSize: 10, color: AppColors.warning)),
+                            Text(order.assignedCrew!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
                         ],
                       ),
                     ),
                     DataCell(
-                      InkWell(
-                        onTap: () => _showOrderDetailModal(context, order),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(
-                            '${order.completedTasksCount}/${order.totalTasksCount} pasos (${(order.progressPercentage * 100).toInt()}%)',
-                            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
-                          ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          '${order.completedTasksCount}/${order.totalTasksCount} (${(order.progressPercentage * 100).toInt()}%)',
+                          style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
                     DataCell(
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: statusColor.withValues(alpha: 0.5))),
-                        child: Text(order.status.name.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor)),
+                        decoration: BoxDecoration(
+                          color: statusBg,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          order.status.name.toUpperCase(),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
+                        ),
                       ),
                     ),
-                    // Acciones: Ver detalle, Descargar PDF, Modificar, Eliminar
                     DataCell(
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
-                            tooltip: 'Ver Detalle y Gestionar Pasos del Protocolo',
-                            onPressed: () => _showOrderDetailModal(context, order),
+                            icon: Icon(
+                              isSelectedRow ? Icons.visibility : Icons.visibility_outlined,
+                              size: 17,
+                              color: AppColors.primary,
+                            ),
+                            tooltip: 'Inspeccionar en panel lateral',
+                            onPressed: () {
+                              setState(() {
+                                _selectedOrderId = isSelectedRow ? null : order.id;
+                              });
+                            },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.picture_as_pdf, size: 18, color: AppColors.warning),
-                            tooltip: 'Descargar Informe PDF Oficial (Entrega a Empresa)',
+                            icon: const Icon(Icons.picture_as_pdf, size: 17, color: AppColors.primary),
+                            tooltip: 'Descargar Informe PDF Oficial',
                             onPressed: () => _handleDownloadPdf(context, order),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
-                            tooltip: 'Modificar Orden de Trabajo y Pasos',
+                            icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textSecondary),
+                            tooltip: 'Modificar orden',
                             onPressed: () => _showCreateOrderDialog(context, orderToEdit: order),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                            tooltip: 'Eliminar Orden',
+                            icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.danger),
+                            tooltip: 'Eliminar orden',
                             onPressed: () => _confirmDeleteOrder(order),
                           ),
                         ],
@@ -1510,6 +1811,21 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
         ),
       ],
     );
+
+    if (selectedOrder != null) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: listViewContent),
+          SizedBox(
+            width: 490,
+            child: _buildLateralDetailPanel(selectedOrder, context),
+          ),
+        ],
+      );
+    }
+
+    return listViewContent;
   }
 
   // --- Pestaña 2: Protocolos Técnicos & Plantillas Maestras ---
@@ -1534,36 +1850,48 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Catálogo de Protocolos Técnicos Maestros', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+                const Text(
+                  'Catálogo de Protocolos Técnicos Maestros',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
+                ),
                 const SizedBox(height: 4),
-                Text('${templates.length} protocolos estandarizados con procedimientos paso a paso y tolerancias', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                Text(
+                  '${templates.length} protocolos estandarizados con procedimientos paso a paso y tolerancias',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
               ],
             ),
             ElevatedButton.icon(
               onPressed: () => _showProtocolDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('NUEVO PROTOCOLO TÉCNICO'),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('NUEVO PROTOCOLO TÉCNICO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // Barra de Búsqueda de Protocolos
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
           child: TextField(
             decoration: const InputDecoration(
               hintText: 'Buscar protocolo por nombre, máquina o procedimiento...',
-              prefixIcon: Icon(Icons.search, color: AppColors.primary),
+              prefixIcon: Icon(Icons.search, size: 18, color: AppColors.primary),
               isDense: true,
               border: InputBorder.none,
+              filled: false,
             ),
             onChanged: (val) => setState(() => _protocolSearchQuery = val),
           ),
@@ -1573,20 +1901,27 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
         if (filteredTemplates.isEmpty)
           Container(
             padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
-            child: const Center(child: Text('No se encontraron protocolos técnicos.')),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Center(
+              child: Text('No se encontraron protocolos técnicos.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            ),
           )
         else
           ...filteredTemplates.map((template) {
             return Card(
               margin: const EdgeInsets.only(bottom: 16),
-              color: AppColors.surface,
+              color: Colors.white,
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 side: const BorderSide(color: AppColors.border),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1596,10 +1931,10 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.15),
+                            color: AppColors.primaryContainer,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.rule, color: AppColors.primary, size: 24),
+                          child: const Icon(Icons.rule, color: AppColors.primary, size: 22),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -1609,24 +1944,31 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Text(template.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                    child: Text(
+                                      template.name,
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                    ),
                                   ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: AppColors.surfaceElevated,
+                                      color: AppColors.primaryContainer,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: Text(template.type.name.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                    child: Text(
+                                      template.type.name.toUpperCase(),
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: AppColors.surfaceElevated,
+                                      color: AppColors.surfaceSecondary,
                                       borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.border),
                                     ),
-                                    child: Text('${template.estimatedMinutes} min', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                    child: Text('${template.estimatedMinutes} min', style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
                                   ),
                                 ],
                               ),
@@ -1643,8 +1985,11 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('PASOS TÉCNICOS DEL PROTOCOLO (${template.steps.length}):', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                        ElevatedButton.icon(
+                        Text(
+                          'PASOS TÉCNICOS DEL PROTOCOLO (${template.steps.length}):',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.primary),
+                        ),
+                        OutlinedButton.icon(
                           onPressed: () async {
                             final newStep = await _showAddStepDialog(context);
                             if (newStep != null) {
@@ -1659,12 +2004,12 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                               }
                             }
                           },
-                          icon: const Icon(Icons.add_circle, size: 14),
-                          label: const Text('AGREGAR PASO AL PROTOCOLO'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                          icon: const Icon(Icons.add_circle, size: 14, color: AppColors.primary),
+                          label: const Text('AGREGAR PASO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.border),
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                           ),
                         ),
                       ],
@@ -1682,37 +2027,41 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         badgeColor = AppColors.warning;
                       } else if (step.type == ChecklistItemType.photoRequired) {
                         badgeText = 'Foto Obligatoria';
-                        badgeColor = Colors.purpleAccent;
+                        badgeColor = AppColors.paused;
                       }
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
+                          color: AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border.withValues(alpha: 0.4)),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Row(
                           children: [
                             CircleAvatar(
                               radius: 11,
-                              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                              backgroundColor: AppColors.primaryContainer,
                               child: Text('$sIdx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                              child: Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                             ),
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor.withValues(alpha: 0.4))),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                              ),
                               child: Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor)),
                             ),
                             const SizedBox(width: 6),
                             IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
                               tooltip: 'Modificar este paso',
                               onPressed: () async {
                                 final edited = await _showAddStepDialog(context, initialStep: step);
@@ -1743,12 +2092,20 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                       children: [
                         OutlinedButton.icon(
                           onPressed: () => _showProtocolDialog(context, templateToEdit: template),
-                          icon: const Icon(Icons.edit, size: 14),
-                          label: const Text('Editar Protocolo', style: TextStyle(fontSize: 12)),
+                          icon: const Icon(Icons.edit, size: 14, color: AppColors.textPrimary),
+                          label: const Text('Editar Protocolo', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.danger,
+                            side: BorderSide(color: AppColors.danger.withValues(alpha: 0.3)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
                           onPressed: () {
                             ref.read(taskTemplatesProvider.notifier).deleteTemplate(template.id);
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1760,12 +2117,17 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            elevation: 0,
+                          ),
                           onPressed: () {
                             _showCreateOrderDialog(context, initialTemplate: template);
                           },
                           icon: const Icon(Icons.send, size: 14),
-                          label: const Text('Despachar OT con este Protocolo', style: TextStyle(fontSize: 12)),
+                          label: const Text('Despachar OT con este Protocolo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -1783,10 +2145,18 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: FilterChip(
-        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textSecondary)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
         selected: isSelected,
         selectedColor: AppColors.primary,
-        backgroundColor: AppColors.surfaceElevated,
+        backgroundColor: Colors.white,
+        side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border),
         showCheckmark: false,
         onSelected: (_) => onSelected(value),
       ),

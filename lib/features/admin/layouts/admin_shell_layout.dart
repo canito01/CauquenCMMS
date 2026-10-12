@@ -22,10 +22,10 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
   int _selectedIndex = 0;
 
   final List<String> _tabTitles = [
-    'Panel General & KPIs',
+    'Panel General & Reportes',
     'Órdenes de Trabajo',
     'Parque de Activos',
-    'Almacén de Repuestos',
+    'Almacén de Repuestos & Stock',
     'Personal & Cuadrillas',
   ];
 
@@ -38,29 +38,58 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
 
     if (!isSupervisor && !isAdmin) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surfaceLight,
         body: Center(
           child: Container(
+            width: 440,
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.danger),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline, size: 60, color: AppColors.danger),
-                const SizedBox(height: 16),
-                const Text('ACCESO RESTRINGIDO A ADMINISTRACIÓN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 8),
-                const Text('Solo usuarios con perfil de Supervisor o Administrador pueden acceder a este portal.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.dangerContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.lock_outline, size: 40, color: AppColors.danger),
+                ),
                 const SizedBox(height: 20),
+                const Text(
+                  'Acceso Restringido',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Solo usuarios con perfil de Supervisión o Administración pueden acceder al portal de gestión.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                ),
+                const SizedBox(height: 24),
                 ElevatedButton.icon(
                   onPressed: () => context.go('/'),
-                  icon: const Icon(Icons.phone_android),
+                  icon: const Icon(Icons.phone_android, size: 16),
                   label: const Text('Ir a la App Móvil de Operario'),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -70,34 +99,33 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surfaceLight,
       body: Row(
         children: [
-          // Sidebar de Navegación Lateral (Diseño Desktop Industrial)
+          // Sidebar de Navegación Lateral (MaintainX SaaS Minimalista)
           Container(
-            width: 260,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: const Border(right: BorderSide(color: AppColors.border)),
+            width: 240,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceLight,
+              border: Border(right: BorderSide(color: AppColors.border, width: 1)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Header Marca
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
                   child: Row(
                     children: [
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary),
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Center(
-                          child: Text('🦅', style: TextStyle(fontSize: 22)),
+                          child: Text('🦅', style: TextStyle(fontSize: 18)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -108,9 +136,10 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                             Text(
                               'Cauquén CMMS',
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.2,
                               ),
                             ),
                             Text(
@@ -118,7 +147,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                               style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -127,61 +156,69 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                const Divider(height: 1, thickness: 1, color: AppColors.border),
 
                 // Menú de Navegación
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: const Text(
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  child: Text(
                     'GESTIÓN & OPERACIONES',
                     style: TextStyle(
                       fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
                       color: AppColors.textMuted,
                     ),
                   ),
                 ),
-                _buildNavItem(0, Icons.dashboard_outlined, Icons.dashboard, 'Panel General'),
+                _buildNavItem(0, Icons.insert_chart_outlined, Icons.insert_chart, 'Panel & Reportes'),
                 _buildNavItem(1, Icons.assignment_outlined, Icons.assignment, 'Órdenes de Trabajo'),
-                _buildNavItem(2, Icons.precision_manufacturing_outlined, Icons.precision_manufacturing, 'Parque de Activos'),
-                _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Inventario & Stock'),
-                _buildNavItem(4, Icons.people_alt_outlined, Icons.people_alt, 'Personal & Cuadrillas'),
+                _buildNavItem(2, Icons.precision_manufacturing_outlined, Icons.precision_manufacturing, 'Activos'),
+                _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Repuestos & Stock'),
+                _buildNavItem(4, Icons.people_outline, Icons.people, 'Personal & Cuadrillas'),
 
                 const Spacer(),
-                const Divider(height: 1),
+                const Divider(height: 1, thickness: 1, color: AppColors.border),
 
-                // Botón para Cambiar a Vista de Operario Móvil
+                // Switch a Modo Operario Móvil
                 Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: OutlinedButton.icon(
                     onPressed: () => context.go('/'),
-                    icon: const Icon(Icons.phone_android, size: 16, color: AppColors.warning),
+                    icon: const Icon(Icons.phone_android, size: 15, color: AppColors.primary),
                     label: const Text(
-                      'VER MODO OPERARIO MÓVIL',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warning),
+                      'Modo Operario Móvil',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
                     ),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: AppColors.warning.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
 
                 // Perfil del Administrador Logueado
                 Container(
-                  padding: const EdgeInsets.all(14),
-                  color: AppColors.surfaceElevated,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                  ),
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: 18,
-                        backgroundColor: isSupervisor ? AppColors.warning.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.2),
-                        child: Icon(
-                          isSupervisor ? Icons.verified_user : Icons.engineering,
-                          size: 18,
-                          color: isSupervisor ? AppColors.warning : AppColors.primary,
+                        radius: 17,
+                        backgroundColor: AppColors.primaryContainer,
+                        child: Text(
+                          (user?.name.isNotEmpty == true ? user!.name[0] : 'A').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -191,20 +228,22 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                           children: [
                             Text(
                               user?.name ?? 'Administrador',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               user?.roleDisplayName ?? 'Supervisión',
-                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
                         tooltip: 'Cerrar Sesión',
-                        icon: const Icon(Icons.logout, size: 18, color: AppColors.danger),
+                        icon: const Icon(Icons.logout, size: 16, color: AppColors.textSecondary),
+                        hoverColor: AppColors.dangerContainer,
+                        splashRadius: 18,
                         onPressed: () async {
                           await ref.read(authProvider.notifier).logout();
                         },
@@ -220,13 +259,13 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
           Expanded(
             child: Column(
               children: [
-                // Topbar Superior
+                // Topbar Superior Minimalista
                 Container(
-                  height: 64,
+                  height: 58,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    border: const Border(bottom: BorderSide(color: AppColors.border)),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -235,19 +274,29 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                         children: [
                           Text(
                             _tabTitles[_selectedIndex],
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceElevated,
+                              color: AppColors.surfaceSecondary,
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: AppColors.border),
                             ),
-                            child: const Text(
-                              'Nave Industrial A & B • Planta Central',
-                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.business, size: 12, color: AppColors.textMuted),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Planta Central • Nave Industrial A & B',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -291,11 +340,11 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
         onTap: () => setState(() => _selectedIndex = index),
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : Colors.transparent,
+            color: isSelected ? AppColors.primaryContainer : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: isSelected ? Border.all(color: AppColors.primary.withValues(alpha: 0.4)) : null,
+            border: isSelected ? Border.all(color: AppColors.primary.withValues(alpha: 0.25), width: 1) : null,
           ),
           child: Row(
             children: [
@@ -304,14 +353,14 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                 size: 18,
                 color: isSelected ? AppColors.primary : AppColors.textSecondary,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
                   ),
                 ),
               ),

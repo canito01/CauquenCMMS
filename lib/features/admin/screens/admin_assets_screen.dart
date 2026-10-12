@@ -141,41 +141,59 @@ class _AdminAssetsScreenState extends ConsumerState<AdminAssetsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Parque de Maquinaria y Activos Industriales', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+                const Text(
+                  'Parque de Maquinaria y Activos Industriales',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
+                ),
                 const SizedBox(height: 4),
-                Text('${filtered.length} equipos registrados en planta', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                Text('${filtered.length} equipos registrados en planta', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
             ElevatedButton.icon(
               onPressed: () => _showAddAssetDialog(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('NUEVO ACTIVO'),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('NUEVO ACTIVO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // Barra de búsqueda
         Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Row(
             children: [
               Expanded(
                 child: TextField(
-                  decoration: const InputDecoration(hintText: 'Buscar activo por código, nombre o ubicación...', prefixIcon: Icon(Icons.search, color: AppColors.primary), isDense: true),
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar activo por código, nombre o ubicación...',
+                    prefixIcon: Icon(Icons.search, size: 18, color: AppColors.primary),
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surfaceLight,
+                  ),
                   onChanged: (val) => setState(() => _searchQuery = val),
                 ),
               ),
               const SizedBox(width: 16),
               DropdownButton<String?>(
                 value: _criticalityFilter,
-                dropdownColor: AppColors.surfaceElevated,
+                dropdownColor: Colors.white,
                 hint: const Text('Criticidad: Todas', style: TextStyle(fontSize: 12)),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Todas', style: TextStyle(fontSize: 12))),
-                  const DropdownMenuItem(value: 'ALTA', child: Text('ALTA', style: TextStyle(fontSize: 12))),
+                  const DropdownMenuItem(value: 'ALTA', child: Text('ALTA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.danger))),
                   const DropdownMenuItem(value: 'MEDIA', child: Text('MEDIA', style: TextStyle(fontSize: 12))),
                   const DropdownMenuItem(value: 'BAJA', child: Text('BAJA', style: TextStyle(fontSize: 12))),
                 ],
@@ -184,23 +202,30 @@ class _AdminAssetsScreenState extends ConsumerState<AdminAssetsScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
         // Tabla de Activos
         Container(
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
+              headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+              dataRowMinHeight: 50,
+              dataRowMaxHeight: 54,
               columns: const [
-                DataColumn(label: Text('Código', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Nombre de Máquina / Equipo', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Ubicación en Planta', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Criticidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Último Mant.', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('CÓDIGO')),
+                DataColumn(label: Text('MÁQUINA / EQUIPO')),
+                DataColumn(label: Text('UBICACIÓN EN PLANTA')),
+                DataColumn(label: Text('CRITICIDAD')),
+                DataColumn(label: Text('ESTADO')),
+                DataColumn(label: Text('ÚLTIMO MANT.')),
               ],
               rows: filtered.map((asset) {
                 final isOperative = asset.status == 'OPERATIVO';
@@ -209,27 +234,42 @@ class _AdminAssetsScreenState extends ConsumerState<AdminAssetsScreen> {
                 return DataRow(
                   cells: [
                     DataCell(Text(asset.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                    DataCell(Text(asset.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    DataCell(Text(asset.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
                     DataCell(Text(asset.location, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
                     DataCell(
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isHighCrit ? AppColors.danger.withValues(alpha: 0.15) : AppColors.surfaceElevated,
+                          color: isHighCrit ? AppColors.dangerContainer : AppColors.surfaceSecondary,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isHighCrit ? AppColors.danger : AppColors.border),
+                          border: Border.all(color: isHighCrit ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
                         ),
-                        child: Text(asset.criticality, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isHighCrit ? AppColors.danger : Colors.white)),
+                        child: Text(
+                          asset.criticality,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isHighCrit ? AppColors.danger : AppColors.textSecondary,
+                          ),
+                        ),
                       ),
                     ),
                     DataCell(
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isOperative ? AppColors.success.withValues(alpha: 0.15) : AppColors.warning.withValues(alpha: 0.15),
+                          color: isOperative ? AppColors.successContainer : AppColors.warningContainer,
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: isOperative ? AppColors.success.withValues(alpha: 0.3) : AppColors.warning.withValues(alpha: 0.3)),
                         ),
-                        child: Text(asset.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isOperative ? AppColors.success : AppColors.warning)),
+                        child: Text(
+                          asset.status,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isOperative ? AppColors.success : AppColors.warning,
+                          ),
+                        ),
                       ),
                     ),
                     DataCell(Text(asset.lastMaintenance, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),

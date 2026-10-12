@@ -39,7 +39,7 @@ class AdminDashboardScreen extends ConsumerWidget {
               children: const [
                 Text(
                   'Panel de Comando Industrial',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                 ),
                 SizedBox(height: 4),
                 Text(
@@ -51,7 +51,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.border),
               ),
@@ -61,7 +61,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   SizedBox(width: 8),
                   Text(
                     'Planta Central • Turno Activo',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                 ],
               ),
@@ -210,7 +210,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.white)),
+            Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textPrimary)),
             Text('$count OT (${(pct * 100).toInt()}%)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
@@ -275,7 +275,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(asset.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(asset.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
                         Text('${asset.code} • ${asset.location}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                     ),
@@ -363,7 +363,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       children: [
                         Text(
                           '${order.orderNumber} • ${order.title}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

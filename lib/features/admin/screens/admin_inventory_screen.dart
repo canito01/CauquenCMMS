@@ -451,8 +451,8 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
       children: [
         // Cabecera superior con botones de acción rápida
         Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          color: AppColors.surface,
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          color: Colors.white,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -465,46 +465,65 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Gestión de Inventario & Repuestos', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+                      const Text(
+                        'Gestión de Inventario & Repuestos',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
+                      ),
                       const SizedBox(height: 4),
-                      Text('${spareParts.length} artículos en catálogo • $lowStockCount con alerta de stock crítico', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                      Text('${spareParts.length} artículos en catálogo • $lowStockCount con alerta de stock crítico', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   ),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      ElevatedButton.icon(
+                      OutlinedButton.icon(
                         onPressed: () => _showStockAdjustmentDialog(isAddition: true),
-                        icon: const Icon(Icons.add_circle, size: 16),
-                        label: const Text('INGRESO DE STOCK (+)'),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
+                        icon: const Icon(Icons.add_circle_outline, size: 15, color: AppColors.success),
+                        label: const Text('INGRESO (+)', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w700, fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppColors.success.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
-                      ElevatedButton.icon(
+                      OutlinedButton.icon(
                         onPressed: () => _showStockAdjustmentDialog(isAddition: false),
-                        icon: const Icon(Icons.remove_circle, size: 16),
-                        label: const Text('SALIDA MANUAL (-)'),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+                        icon: const Icon(Icons.remove_circle_outline, size: 15, color: AppColors.danger),
+                        label: const Text('SALIDA (-)', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700, fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                       ElevatedButton.icon(
                         onPressed: () => _showPartDialog(),
-                        icon: const Icon(Icons.inventory_2, size: 16),
-                        label: const Text('NUEVO REPUESTO'),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('NUEVO REPUESTO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TabBar(
                 controller: _tabController,
                 indicatorColor: AppColors.primary,
+                indicatorWeight: 3,
                 labelColor: AppColors.primary,
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 unselectedLabelColor: AppColors.textSecondary,
                 tabs: [
-                  Tab(icon: const Icon(Icons.inventory_2), text: 'Catálogo de Repuestos (${filteredParts.length})'),
-                  Tab(icon: const Icon(Icons.history), text: 'Movimientos & Trazabilidad (${stockMovements.length})'),
+                  Tab(icon: const Icon(Icons.inventory_2_outlined, size: 18), text: 'Catálogo de Repuestos (${filteredParts.length})'),
+                  Tab(icon: const Icon(Icons.history, size: 18), text: 'Movimientos & Trazabilidad (${stockMovements.length})'),
                 ],
               ),
             ],
@@ -518,14 +537,15 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
                   child: TextField(
                     decoration: const InputDecoration(
                       hintText: 'Buscar por código SKU, descripción o ubicación en almacén...',
-                      prefixIcon: Icon(Icons.search, color: AppColors.primary),
+                      prefixIcon: Icon(Icons.search, size: 18, color: AppColors.primary),
                       isDense: true,
                       border: InputBorder.none,
+                      filled: false,
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   ),
@@ -535,9 +555,10 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
               FilterChip(
                 selected: _onlyLowStock,
                 label: Text('Solo Stock Crítico ($lowStockCount)'),
-                labelStyle: TextStyle(color: _onlyLowStock ? Colors.white : AppColors.danger, fontWeight: FontWeight.bold),
-                backgroundColor: AppColors.surface,
+                labelStyle: TextStyle(color: _onlyLowStock ? Colors.white : AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11),
+                backgroundColor: Colors.white,
                 selectedColor: AppColors.danger,
+                side: BorderSide(color: _onlyLowStock ? AppColors.danger : AppColors.danger.withValues(alpha: 0.3)),
                 checkmarkColor: Colors.white,
                 onSelected: (val) => setState(() => _onlyLowStock = val),
               ),
@@ -555,29 +576,32 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 padding: const EdgeInsets.all(24),
                 children: [
                   Container(
-                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
                     clipBehavior: Clip.antiAlias,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
+                        headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+                        headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+                        dataRowMinHeight: 50,
+                        dataRowMaxHeight: 54,
                         columns: const [
-                          DataColumn(label: Text('Código SKU', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Descripción de la Pieza', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Ubicación Almacén', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Stock Disponible', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Consumo Acumulado', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Estado Stock', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Ajuste Rápido', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Acciones', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('CÓDIGO SKU')),
+                          DataColumn(label: Text('DESCRIPCIÓN DE PIEZA')),
+                          DataColumn(label: Text('UBICACIÓN ALMACÉN')),
+                          DataColumn(label: Text('STOCK DISPONIBLE')),
+                          DataColumn(label: Text('CONSUMO ACUM.')),
+                          DataColumn(label: Text('ESTADO STOCK')),
+                          DataColumn(label: Text('AJUSTE RÁPIDO')),
+                          DataColumn(label: Text('ACCIONES')),
                         ],
                         rows: filteredParts.map((part) {
                           return DataRow(
                             cells: [
                               DataCell(Text(part.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                              DataCell(Text(part.description, style: const TextStyle(fontWeight: FontWeight.w600))),
+                              DataCell(Text(part.description, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
                               DataCell(Text(part.locationWarehouse, style: const TextStyle(color: AppColors.textSecondary))),
-                              DataCell(Text('${part.stockAvailable} ${part.unit}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                              DataCell(Text('${part.stockAvailable} ${part.unit}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary))),
                               DataCell(Text('${part.consumedQuantity} ${part.unit}', style: const TextStyle(color: AppColors.textMuted))),
                               DataCell(
                                 Container(
