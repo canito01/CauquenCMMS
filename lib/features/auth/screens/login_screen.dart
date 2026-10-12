@@ -139,24 +139,117 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          'ACCESO DE CUADRILLA',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: AppColors.textSecondary,
-                          ),
+                        Row(
+                          children: [
+                            const Text(
+                              'ACCESO AL SISTEMA',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
+
+                        // Selector de Perfil / Destino (Web vs Móvil)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _idController.text = 'SUP-1020';
+                                    _passwordController.text = 'password123';
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _idController.text.contains('SUP')
+                                        ? AppColors.primary.withValues(alpha: 0.25)
+                                        : AppColors.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: _idController.text.contains('SUP')
+                                          ? AppColors.primary
+                                          : AppColors.border,
+                                      width: _idController.text.contains('SUP') ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: const [
+                                      Icon(Icons.computer, size: 18, color: AppColors.primary),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'PORTAL WEB',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                      Text(
+                                        'Supervisor de Planta',
+                                        style: TextStyle(fontSize: 10, color: AppColors.primary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _idController.text = 'TEC-4482';
+                                    _passwordController.text = 'password123';
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: !_idController.text.contains('SUP')
+                                        ? AppColors.warning.withValues(alpha: 0.25)
+                                        : AppColors.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: !_idController.text.contains('SUP')
+                                          ? AppColors.warning
+                                          : AppColors.border,
+                                      width: !_idController.text.contains('SUP') ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: const [
+                                      Icon(Icons.phone_android, size: 18, color: AppColors.warning),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'APP MÓVIL',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                      Text(
+                                        'Operario Técnico',
+                                        style: TextStyle(fontSize: 10, color: AppColors.warning),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
 
                         // Campo: Legajo / Correo
                         TextField(
                           controller: _idController,
                           textInputAction: TextInputAction.next,
+                          onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
                             labelText: 'Legajo o Correo de Planta',
-                            hintText: 'Ej: TEC-4482 o correo@planta.com',
+                            hintText: 'Ej: SUP-1020 o TEC-4482',
                             prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
                             filled: true,
                             fillColor: AppColors.surfaceElevated,
@@ -287,71 +380,99 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  ...mockUsers.map((user) {
-                    final isTech = user.role == UserRole.technician;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: InkWell(
-                        onTap: () => _handleQuickLogin(user),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isTech
-                                  ? AppColors.primary.withValues(alpha: 0.3)
-                                  : AppColors.warning.withValues(alpha: 0.4),
+                  ...(() {
+                    final sorted = List<UserModel>.from(mockUsers)
+                      ..sort((a, b) => b.role.index.compareTo(a.role.index)); // Supervisor primero
+                    return sorted.map((user) {
+                      final isTech = user.role == UserRole.technician;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          onTap: () => _handleQuickLogin(user),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isTech
+                                    ? AppColors.warning.withValues(alpha: 0.4)
+                                    : AppColors.primary.withValues(alpha: 0.6),
+                                width: isTech ? 1 : 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: isTech
+                                      ? AppColors.warning.withValues(alpha: 0.2)
+                                      : AppColors.primary.withValues(alpha: 0.2),
+                                  child: Icon(
+                                    isTech ? Icons.phone_android : Icons.computer,
+                                    size: 18,
+                                    color: isTech ? AppColors.warning : AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            user.name,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: isTech
+                                                  ? AppColors.warning.withValues(alpha: 0.15)
+                                                  : AppColors.primary.withValues(alpha: 0.2),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              isTech ? '📱 MÓVIL' : '🖥️ WEB ADMIN',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                color: isTech ? AppColors.warning : AppColors.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${user.badge} • ${user.roleDisplayName}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                  color: AppColors.textMuted,
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: isTech
-                                    ? AppColors.primary.withValues(alpha: 0.2)
-                                    : AppColors.warning.withValues(alpha: 0.2),
-                                child: Icon(
-                                  isTech ? Icons.engineering : Icons.verified_user,
-                                  size: 20,
-                                  color: isTech ? AppColors.primary : AppColors.warning,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      user.name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${user.badge} • ${user.roleDisplayName}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: AppColors.textMuted,
-                              ),
-                            ],
-                          ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    });
+                  })(),
 
                   const SizedBox(height: 16),
                   Text(

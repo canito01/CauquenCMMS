@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/models/user_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
@@ -49,12 +48,21 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          if (currentUser?.role == UserRole.supervisor || currentUser?.role == UserRole.admin)
-            IconButton(
-              icon: const Icon(Icons.admin_panel_settings, color: AppColors.primary),
-              tooltip: 'Portal Administrativo Web',
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ElevatedButton.icon(
               onPressed: () => context.go('/admin'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.computer, size: 16),
+              label: const Text('WEB ADMIN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
+          ),
+          const SizedBox(width: 8),
           const Padding(
             padding: EdgeInsets.only(right: 16),
             child: ConnectivityBadge(),
@@ -70,6 +78,65 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Banner informativo para pantallas amplias (Desktop / Navegador Web)
+            if (MediaQuery.of(context).size.width > 700) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.desktop_windows, color: AppColors.primary, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Estás en pantalla amplia de computadora (Modo Operario Móvil)',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Los empleados usan esta vista en celular. Para acceder a la Plataforma Web de Gestión Administrativa (KPIs, despacho de OTs, inventario, activos y cuadrillas):',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => context.go('/admin'),
+                      icon: const Icon(Icons.open_in_new, size: 18),
+                      label: const Text('ABRIR PORTAL WEB ADMINISTRATIVO', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             // Alerta de sincronización si hay elementos pendientes en cola
             if (syncQueue.isNotEmpty) ...[
               Container(
