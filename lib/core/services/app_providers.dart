@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/asset_model.dart';
+import '../models/checklist_item_model.dart';
 import '../models/crew_model.dart';
 import '../models/spare_part_model.dart';
 import '../models/stock_movement_model.dart';
@@ -8,6 +9,7 @@ import '../models/sync_item_model.dart';
 import '../models/task_template_model.dart';
 import '../models/user_model.dart';
 import '../models/work_order_model.dart';
+import '../models/workflow_stage_model.dart';
 import '../config/supabase_config.dart';
 import 'mock_data_service.dart';
 import 'connectivity_service.dart';
@@ -456,6 +458,148 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
         );
   }
 
+  // Registrar foto en paso de checklist específico
+  Future<void> recordStepPhoto(String orderId, String itemId, String photoData) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == itemId) {
+            return item.copyWith(
+              photoUrl: photoData,
+              isCompleted: true,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
+
+    await ref.read(syncQueueProvider.notifier).enqueue(
+          entityId: orderId,
+          actionType: SyncActionType.checklistUpdate,
+          description: 'Foto registrada en paso de OT',
+        );
+  }
+
+  // Registrar foto antes/después en paso específico
+  Future<void> recordStepBeforeAfterPhoto({
+    required String orderId,
+    required String stepId,
+    required String photoUrl,
+    required bool isBefore,
+  }) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == stepId) {
+            final newBefore = isBefore ? photoUrl : item.photoBeforeUrl;
+            final newAfter = !isBefore ? photoUrl : item.photoAfterUrl;
+            final completed = (newBefore != null && newBefore.isNotEmpty) &&
+                (newAfter != null && newAfter.isNotEmpty);
+            return item.copyWith(
+              photoBeforeUrl: newBefore,
+              photoAfterUrl: newAfter,
+              isCompleted: completed,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
+
+    await ref.read(syncQueueProvider.notifier).enqueue(
+          entityId: orderId,
+          actionType: SyncActionType.checklistUpdate,
+          description: 'Foto Antes/Después actualizada en OT',
+        );
+  }
+
+  // Registrar observación / texto en paso
+  Future<void> recordStepText(String orderId, String itemId, String text) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == itemId) {
+            return item.copyWith(
+              textValue: text,
+              isCompleted: text.trim().isNotEmpty,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
+  }
+
+  // Registrar selección única en paso
+  Future<void> recordStepChoice(String orderId, String itemId, String option) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == itemId) {
+            return item.copyWith(
+              selectedOption: option,
+              isCompleted: option.isNotEmpty,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
+  }
+
   // Adjuntar foto de evidencia (URL o Base64) a la orden
   Future<void> attachEvidencePhoto(String orderId, String photoData) async {
     final storage = ref.read(localStorageProvider);
@@ -817,6 +961,57 @@ class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
 
   void deleteTemplate(String id) {
     state = state.where((t) => t.id != id).toList();
+  }
+
+  void addStageToTemplate(String templateId, WorkflowStageModel stage) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final stages = List<WorkflowStageModel>.from(t.stages)..add(stage);
+        return t.copyWith(stages: stages);
+      }
+      return t;
+    }).toList();
+  }
+
+  void deleteStageFromTemplate(String templateId, String stageId) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final stages = t.stages.where((s) => s.id != stageId).toList();
+        final steps = t.steps.where((s) => s.stageId != stageId).toList();
+        return t.copyWith(stages: stages, steps: steps);
+      }
+      return t;
+    }).toList();
+  }
+
+  void addStepToTemplate(String templateId, ChecklistItemModel step) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final steps = List<ChecklistItemModel>.from(t.steps)..add(step);
+        return t.copyWith(steps: steps);
+      }
+      return t;
+    }).toList();
+  }
+
+  void updateStepInTemplate(String templateId, ChecklistItemModel updatedStep) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final steps = t.steps.map((s) => s.id == updatedStep.id ? updatedStep : s).toList();
+        return t.copyWith(steps: steps);
+      }
+      return t;
+    }).toList();
+  }
+
+  void deleteStepFromTemplate(String templateId, String stepId) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final steps = t.steps.where((s) => s.id != stepId).toList();
+        return t.copyWith(steps: steps);
+      }
+      return t;
+    }).toList();
   }
 }
 

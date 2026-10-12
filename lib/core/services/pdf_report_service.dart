@@ -262,23 +262,36 @@ class PdfReportService {
                         ? '${item.numericValue} ${item.unit ?? ""}'
                         : 'Nominal (${item.minAcceptable ?? ""}-${item.maxAcceptable ?? ""} ${item.unit ?? ""})';
                   } else if (item.type == ChecklistItemType.photoRequired) {
-                    tipoStr = 'Foto Obligatoria';
+                    tipoStr = 'Foto';
                     valorStr = item.isCompleted ? 'Registrada' : 'Pendiente';
+                  } else if (item.type == ChecklistItemType.photoBeforeAfter) {
+                    tipoStr = 'Foto Antes/Después';
+                    valorStr = item.isCompleted ? 'Ambas registradas' : 'Incompleto';
+                  } else if (item.type == ChecklistItemType.textObservation) {
+                    tipoStr = 'Observación';
+                    valorStr = item.textValue ?? '-';
+                  } else if (item.type == ChecklistItemType.singleChoice) {
+                    tipoStr = 'Selección';
+                    valorStr = item.selectedOption ?? '-';
                   }
 
-                  final resultadoStr = item.isCompleted ? 'CONFORME' : 'PENDIENTE';
+                  final resultadoStr = item.isCompleted ? 'CONFORME' : (item.isRequired ? 'PENDIENTE (Req)' : 'OPCIONAL');
+
+                  final titleWithStage = item.stageName.isNotEmpty && item.stageName != 'Etapa 1: Procedimientos Iniciales'
+                      ? '[${item.stageName}]\n${item.title}'
+                      : item.title;
 
                   return pw.TableRow(
                     children: [
                       _buildTableCell(idx.toString(), align: pw.TextAlign.center),
-                      _buildTableCell(item.title),
+                      _buildTableCell(titleWithStage),
                       _buildTableCell(tipoStr, align: pw.TextAlign.center),
                       _buildTableCell(valorStr, align: pw.TextAlign.center),
                       _buildTableCell(
                         resultadoStr,
                         align: pw.TextAlign.center,
                         isBold: true,
-                        color: item.isCompleted ? PdfColors.green800 : PdfColors.orange800,
+                        color: item.isCompleted ? PdfColors.green800 : (item.isRequired ? PdfColors.red800 : PdfColors.orange800),
                       ),
                     ],
                   );

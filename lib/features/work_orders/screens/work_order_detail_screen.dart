@@ -324,8 +324,12 @@ class WorkOrderDetailScreen extends ConsumerWidget {
     );
   }
 
-  // --- Pestaña 2: Tareas (Checklist) ---
+  // --- Pestaña 2: Tareas (Checklist por Etapas) ---
   Widget _buildTasksTab(WorkOrderModel order) {
+    final stages = order.resolvedStages;
+    final totalRequired = order.totalRequiredStepsCount;
+    final doneRequired = order.completedRequiredStepsCount;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -339,12 +343,18 @@ class WorkOrderDetailScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
+                color: order.canBeCompleted ? AppColors.successContainer : AppColors.primaryContainer,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '${order.completedTasksCount} / ${order.totalTasksCount} completados',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                totalRequired > 0
+                    ? '$doneRequired / $totalRequired obligatorios'
+                    : '${order.completedTasksCount} / ${order.totalTasksCount} completados',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: order.canBeCompleted ? AppColors.success : AppColors.primary,
+                ),
               ),
             ),
           ],
@@ -364,58 +374,192 @@ class WorkOrderDetailScreen extends ConsumerWidget {
             ),
           )
         else
-          ...order.checklist.asMap().entries.map((entry) {
-            final idx = entry.key + 1;
-            final item = entry.value;
+          ...stages.asMap().entries.map((stageEntry) {
+            final stageIdx = stageEntry.key + 1;
+            final stage = stageEntry.value;
+            final stageSteps = order.checklist
+                .where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == stages.first))
+                .toList();
+            final stageCompletedCount = stageSteps.where((s) => s.isStepSatisfied).length;
 
-            String subtitle = 'Inspección Sí/No';
-            if (item.type == ChecklistItemType.numericMeasurement) {
-              subtitle = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
-            } else if (item.type == ChecklistItemType.photoRequired) {
-              subtitle = 'Evidencia fotográfica obligatoria';
-            }
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: item.isCompleted ? AppColors.successContainer.withValues(alpha: 0.5) : AppColors.surfaceSecondary,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: item.isCompleted ? AppColors.success.withValues(alpha: 0.3) : AppColors.border,
-                ),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: item.isCompleted ? AppColors.success : AppColors.primary.withValues(alpha: 0.15),
-                    child: Icon(
-                      item.isCompleted ? Icons.check : Icons.circle,
-                      size: item.isCompleted ? 14 : 8,
-                      color: item.isCompleted ? Colors.white : AppColors.primary,
-                    ),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Cabecera de Etapa
+                Container(
+                  margin: EdgeInsets.only(top: stageIdx > 1 ? 16 : 0, bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$idx. ${item.title}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: item.isCompleted ? AppColors.textPrimary : AppColors.textPrimary,
-                          ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: AppColors.primary,
+                        child: Text(
+                          '$stageIdx',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 2),
-                        Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stage.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                            ),
+                            if (stage.description.isNotEmpty)
+                              Text(
+                                stage.description,
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Text(
+                          '$stageCompletedCount/${stageSteps.length}',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+
+                // Pasos de esta etapa
+                if (stageSteps.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    child: Text('Sin pasos en esta etapa.', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                  )
+                else
+                  ...stageSteps.asMap().entries.map((stepEntry) {
+                    final stepIndex = stepEntry.key + 1;
+                    final item = stepEntry.value;
+                    final isSatisfied = item.isStepSatisfied;
+
+                    String subtitle = 'Verificación Sí/No';
+                    IconData typeIcon = Icons.check_circle_outline;
+
+                    switch (item.type) {
+                      case ChecklistItemType.numericMeasurement:
+                        typeIcon = Icons.straighten;
+                        subtitle = item.numericValue != null
+                            ? 'Medición: ${item.numericValue} ${item.unit ?? ""} (Rango: ${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0})'
+                            : 'Medición en ${item.unit ?? "unidades"} (Rango: ${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0})';
+                        break;
+                      case ChecklistItemType.photoRequired:
+                        typeIcon = Icons.camera_alt;
+                        subtitle = item.photoUrl != null ? 'Foto adjuntada' : 'Foto obligatoria requerida';
+                        break;
+                      case ChecklistItemType.photoBeforeAfter:
+                        typeIcon = Icons.compare;
+                        subtitle = 'Fotos Antes/Después (${item.photoBeforeUrl != null ? "Antes ✓" : "Antes ✗"}, ${item.photoAfterUrl != null ? "Después ✓" : "Después ✗"})';
+                        break;
+                      case ChecklistItemType.textObservation:
+                        typeIcon = Icons.edit_note;
+                        subtitle = item.textValue != null && item.textValue!.isNotEmpty
+                            ? 'Observación: "${item.textValue}"'
+                            : 'Observación técnica requerida';
+                        break;
+                      case ChecklistItemType.singleChoice:
+                        typeIcon = Icons.tune;
+                        subtitle = item.selectedOption != null
+                            ? 'Selección: ${item.selectedOption}'
+                            : 'Opciones: ${item.options.join(", ")}';
+                        break;
+                      case ChecklistItemType.booleanCheck:
+                        typeIcon = Icons.done_all;
+                        subtitle = isSatisfied ? 'Verificado' : 'Pendiente de confirmación';
+                        break;
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSatisfied
+                            ? AppColors.successContainer.withValues(alpha: 0.4)
+                            : AppColors.surfaceSecondary,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSatisfied ? AppColors.success.withValues(alpha: 0.3) : AppColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 12,
+                            backgroundColor: isSatisfied ? AppColors.success : AppColors.primary.withValues(alpha: 0.15),
+                            child: Icon(
+                              isSatisfied ? Icons.check : typeIcon,
+                              size: 13,
+                              color: isSatisfied ? Colors.white : AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '$stepIndex. ${item.title}',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (item.isRequired)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.danger.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'OBLIGATORIO',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.danger,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSatisfied ? AppColors.success : AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
             );
           }),
       ],

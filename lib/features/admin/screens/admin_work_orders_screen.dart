@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/checklist_item_model.dart';
 import '../../../core/models/task_template_model.dart';
+import '../../../core/models/workflow_stage_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../../core/services/mock_data_service.dart';
@@ -73,19 +74,155 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     }
   }
 
+  // --- Helper formatting functions for MaintainX step types ---
+  String _getStepTypeLabel(ChecklistItemModel item) {
+    switch (item.type) {
+      case ChecklistItemType.booleanCheck:
+        return 'Inspección Sí/No';
+      case ChecklistItemType.numericMeasurement:
+        final minStr = item.minAcceptable != null ? '${item.minAcceptable}' : 'min';
+        final maxStr = item.maxAcceptable != null ? '${item.maxAcceptable}' : 'max';
+        return 'Medición ($minStr a $maxStr ${item.unit ?? ""})';
+      case ChecklistItemType.photoRequired:
+        return 'Foto Obligatoria';
+      case ChecklistItemType.photoBeforeAfter:
+        return 'Fotos Antes y Después';
+      case ChecklistItemType.textObservation:
+        return 'Observación de Texto';
+      case ChecklistItemType.singleChoice:
+        final opts = item.options.isNotEmpty ? item.options.join(', ') : 'Opciones';
+        return 'Selección ($opts)';
+    }
+  }
+
+  Color _getStepTypeColor(ChecklistItemType type) {
+    switch (type) {
+      case ChecklistItemType.booleanCheck:
+        return AppColors.primary;
+      case ChecklistItemType.numericMeasurement:
+        return AppColors.warning;
+      case ChecklistItemType.photoRequired:
+        return AppColors.paused;
+      case ChecklistItemType.photoBeforeAfter:
+        return Colors.purple;
+      case ChecklistItemType.textObservation:
+        return Colors.teal;
+      case ChecklistItemType.singleChoice:
+        return Colors.indigo;
+    }
+  }
+
+  // --- Sub-diálogo para Añadir o Editar Etapa / Fase del Protocolo ---
+  Future<WorkflowStageModel?> _showAddStageDialog(
+    BuildContext context, {
+    WorkflowStageModel? stageToEdit,
+    int nextOrder = 1,
+    int? existingStagesCount,
+  }) async {
+    final effectiveOrder = stageToEdit?.order ?? (existingStagesCount != null ? existingStagesCount + 1 : nextOrder);
+    final nameCtrl = TextEditingController(text: stageToEdit?.name ?? 'Etapa $effectiveOrder: ');
+    final descCtrl = TextEditingController(text: stageToEdit?.description ?? '');
+
+    return showDialog<WorkflowStageModel>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Row(
+            children: [
+              Icon(stageToEdit != null ? Icons.edit : Icons.playlist_add, color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                stageToEdit != null ? 'Modificar Etapa del Protocolo' : 'Añadir Nueva Etapa / Fase',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre de la Etapa *',
+                    hintText: 'Ej: Etapa 2: Inspección de Luminarias & Fotocélulas',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Descripción / Alcance de esta Etapa',
+                    hintText: 'Ej: Foto de luminarias apagadas, tapado de fotocélulas y test de encendido',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                final stage = WorkflowStageModel(
+                  id: stageToEdit?.id ?? const Uuid().v4(),
+                  name: nameCtrl.text.trim(),
+                  description: descCtrl.text.trim(),
+                  order: effectiveOrder,
+                );
+                Navigator.pop(ctx, stage);
+              },
+              child: Text(stageToEdit != null ? 'Guardar Etapa' : 'Crear Etapa'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // --- Sub-diálogo para Agregar o Editar Paso al Checklist ---
-  Future<ChecklistItemModel?> _showAddStepDialog(BuildContext context, {ChecklistItemModel? initialStep}) async {
+  Future<ChecklistItemModel?> _showAddStepDialog(
+    BuildContext context, {
+    ChecklistItemModel? initialStep,
+    List<WorkflowStageModel>? availableStages,
+    List<WorkflowStageModel>? stages,
+    String? defaultStageId,
+  }) async {
     final titleCtrl = TextEditingController(text: initialStep?.title ?? '');
+    final descCtrl = TextEditingController(text: initialStep?.description ?? '');
     ChecklistItemType stepType = initialStep?.type ?? ChecklistItemType.booleanCheck;
     final unitCtrl = TextEditingController(text: initialStep?.unit ?? 'bar');
     final minCtrl = TextEditingController(text: initialStep?.minAcceptable != null ? initialStep!.minAcceptable.toString() : '1.0');
     final maxCtrl = TextEditingController(text: initialStep?.maxAcceptable != null ? initialStep!.maxAcceptable.toString() : '5.0');
+    final optionsCtrl = TextEditingController(text: initialStep?.options.isNotEmpty == true ? initialStep!.options.join(', ') : 'Bueno, Regular, Malo');
+    bool isRequired = initialStep?.isRequired ?? true;
+
+    final effectiveStages = (stages != null && stages.isNotEmpty)
+        ? stages
+        : ((availableStages != null && availableStages.isNotEmpty)
+            ? availableStages
+            : [
+                const WorkflowStageModel(id: 'stg-1', name: 'Etapa 1: Procedimientos Iniciales', order: 1),
+              ]);
+
+    String selectedStageId = initialStep?.stageId ?? (defaultStageId ?? effectiveStages.first.id);
+    if (!effectiveStages.any((s) => s.id == selectedStageId)) {
+      selectedStageId = effectiveStages.first.id;
+    }
 
     return showDialog<ChecklistItemModel>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setStepState) {
+            final activeStage = effectiveStages.firstWhere((s) => s.id == selectedStageId, orElse: () => effectiveStages.first);
+
             return AlertDialog(
               backgroundColor: AppColors.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -93,63 +230,173 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                 children: [
                   Icon(initialStep != null ? Icons.edit : Icons.add_circle_outline, color: AppColors.primary, size: 20),
                   const SizedBox(width: 8),
-                  Text(initialStep != null ? 'Modificar Paso del Protocolo' : 'Agregar Paso al Protocolo Técnico', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(
+                    initialStep != null ? 'Modificar Paso del Protocolo' : 'Agregar Paso al Protocolo Técnico',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
               content: SizedBox(
-                width: 440,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleCtrl,
-                      autofocus: true,
-                      decoration: const InputDecoration(labelText: 'Descripción del Procedimiento / Tarea', hintText: 'Ej: Medición de temperatura en rodamientos'),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<ChecklistItemType>(
-                      initialValue: stepType,
-                      dropdownColor: AppColors.surfaceElevated,
-                      decoration: const InputDecoration(labelText: 'Tipo de Validación'),
-                      items: const [
-                        DropdownMenuItem(value: ChecklistItemType.booleanCheck, child: Text('Inspección Sí/No (Checklist Booleano)')),
-                        DropdownMenuItem(value: ChecklistItemType.numericMeasurement, child: Text('Medición Numérica (con Tolerancia Min/Max)')),
-                        DropdownMenuItem(value: ChecklistItemType.photoRequired, child: Text('Evidencia Fotográfica Obligatoria')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setStepState(() => stepType = val);
-                      },
-                    ),
-                    if (stepType == ChecklistItemType.numericMeasurement) ...[
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Selector de Etapa
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedStageId,
+                        dropdownColor: AppColors.surfaceElevated,
+                        decoration: const InputDecoration(
+                          labelText: 'Asignar a Etapa / Fase *',
+                          prefixIcon: Icon(Icons.layers_outlined, size: 20),
+                        ),
+                        items: effectiveStages.map((s) {
+                          return DropdownMenuItem<String>(
+                            value: s.id,
+                            child: Text(s.name, style: const TextStyle(fontSize: 12)),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setStepState(() => selectedStageId = val);
+                        },
+                      ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: unitCtrl,
-                              decoration: const InputDecoration(labelText: 'Unidad de Medida', hintText: 'bar, °C, mm, V, rpm'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: minCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: 'Mínimo Aceptable'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: maxCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: 'Máximo Aceptable'),
-                            ),
-                          ),
+
+                      TextField(
+                        controller: titleCtrl,
+                        autofocus: initialStep == null,
+                        decoration: const InputDecoration(
+                          labelText: 'Título del Procedimiento / Tarea *',
+                          hintText: 'Ej: Foto obligatoria del manómetro indicando la presión',
+                          prefixIcon: Icon(Icons.task_alt, size: 20),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Instrucción Detallada para el Operario (Opcional)',
+                          hintText: 'Ej: Capturar el dial en régimen térmico normal. Lectura esperada 4 a 5 bar.',
+                          prefixIcon: Icon(Icons.info_outline, size: 20),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      DropdownButtonFormField<ChecklistItemType>(
+                        initialValue: stepType,
+                        dropdownColor: AppColors.surfaceElevated,
+                        decoration: const InputDecoration(
+                          labelText: 'Tipo de Validación / Acción Requerida',
+                          prefixIcon: Icon(Icons.rule_folder_outlined, size: 20),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: ChecklistItemType.booleanCheck, child: Text('✅ Inspección Sí/No (Checklist Booleano)')),
+                          DropdownMenuItem(value: ChecklistItemType.numericMeasurement, child: Text('🔢 Medición Numérica (con Unidad y Tolerancias)')),
+                          DropdownMenuItem(value: ChecklistItemType.photoRequired, child: Text('📸 Registro Fotográfico Obligatorio (Cámara)')),
+                          DropdownMenuItem(value: ChecklistItemType.photoBeforeAfter, child: Text('📷 Foto Doble: ANTES y DESPUÉS de la Tarea')),
+                          DropdownMenuItem(value: ChecklistItemType.textObservation, child: Text('📝 Observación / Nota Técnica Obligatoria')),
+                          DropdownMenuItem(value: ChecklistItemType.singleChoice, child: Text('🔘 Selección de Opción Única')),
                         ],
+                        onChanged: (val) {
+                          if (val != null) setStepState(() => stepType = val);
+                        },
+                      ),
+
+                      if (stepType == ChecklistItemType.numericMeasurement) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: unitCtrl,
+                                decoration: const InputDecoration(labelText: 'Unidad', hintText: 'bar, °C, mm, V, A'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: minCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(labelText: 'Mínimo Tolerado'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: maxCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(labelText: 'Máximo Tolerado'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      if (stepType == ChecklistItemType.singleChoice) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: optionsCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Opciones posibles (separadas por coma)',
+                            hintText: 'Ej: Conforme, Observado, Crítico',
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isRequired ? Icons.lock_clock : Icons.lock_open,
+                                      size: 16,
+                                      color: isRequired ? AppColors.danger : AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      isRequired ? 'Paso OBLIGATORIO (No opcional)' : 'Paso OPCIONAL',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isRequired ? AppColors.danger : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isRequired
+                                      ? 'El operario NO podrá finalizar la orden hasta completarlo.'
+                                      : 'El operario puede omitir este paso si no aplica.',
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                            Switch(
+                              value: isRequired,
+                              activeThumbColor: AppColors.primary,
+                              onChanged: (val) => setStepState(() => isRequired = val),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
               actions: [
@@ -157,15 +404,27 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                 ElevatedButton(
                   onPressed: () {
                     if (titleCtrl.text.trim().isEmpty) return;
+                    final optionsList = optionsCtrl.text.split(',').map((o) => o.trim()).where((o) => o.isNotEmpty).toList();
+
                     final item = ChecklistItemModel(
                       id: initialStep?.id ?? const Uuid().v4(),
+                      stageId: selectedStageId,
+                      stageName: activeStage.name,
                       title: titleCtrl.text.trim(),
+                      description: descCtrl.text.trim(),
                       type: stepType,
                       unit: stepType == ChecklistItemType.numericMeasurement ? unitCtrl.text.trim() : null,
                       minAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(minCtrl.text.trim()) : null,
                       maxAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(maxCtrl.text.trim()) : null,
+                      options: optionsList,
+                      isRequired: isRequired,
                       isCompleted: initialStep?.isCompleted ?? false,
                       numericValue: initialStep?.numericValue,
+                      photoUrl: initialStep?.photoUrl,
+                      photoBeforeUrl: initialStep?.photoBeforeUrl,
+                      photoAfterUrl: initialStep?.photoAfterUrl,
+                      textValue: initialStep?.textValue,
+                      selectedOption: initialStep?.selectedOption,
                     );
                     Navigator.pop(ctx, item);
                   },
@@ -179,7 +438,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     );
   }
 
-  // --- Modal para Crear o Modificar Protocolo Técnico Maestro ---
+  // --- Modal para Crear o Modificar Protocolo Técnico Maestro (MaintainX Multi-Etapa) ---
   void _showProtocolDialog(BuildContext context, {TaskTemplateModel? templateToEdit}) {
     final isEditing = templateToEdit != null;
     final formKey = GlobalKey<FormState>();
@@ -189,12 +448,21 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     WorkOrderType selectedType = templateToEdit?.type ?? WorkOrderType.preventivo;
     WorkOrderPriority selectedPriority = templateToEdit?.defaultPriority ?? WorkOrderPriority.normal;
 
+    List<WorkflowStageModel> stages = List<WorkflowStageModel>.from(
+      templateToEdit?.resolvedStages ?? [
+        const WorkflowStageModel(id: 'stg-1', name: 'Etapa 1: Diagnóstico y Preparación', order: 1),
+      ],
+    );
+
     List<ChecklistItemModel> steps = List<ChecklistItemModel>.from(
       templateToEdit?.steps ?? [
         const ChecklistItemModel(
           id: 'step-init-1',
+          stageId: 'stg-1',
+          stageName: 'Etapa 1: Diagnóstico y Preparación',
           title: 'Bloqueo y consignación de fuentes de energía (LOTO)',
           type: ChecklistItemType.booleanCheck,
+          isRequired: true,
           isCompleted: false,
         ),
       ],
@@ -210,13 +478,13 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
                 children: [
-                  Icon(isEditing ? Icons.edit : Icons.assignment_turned_in, color: AppColors.primary),
+                  Icon(isEditing ? Icons.edit_note : Icons.assignment_turned_in, color: AppColors.primary),
                   const SizedBox(width: 10),
                   Text(isEditing ? 'Modificar Protocolo Técnico' : 'Crear Nuevo Protocolo Técnico Maestro'),
                 ],
               ),
               content: SizedBox(
-                width: 700,
+                width: 760,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -228,7 +496,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                           controller: nameCtrl,
                           decoration: const InputDecoration(
                             labelText: 'Nombre del Protocolo Técnico *',
-                            hintText: 'Ej: Protocolo de Calibración de Celdas de Carga',
+                            hintText: 'Ej: Protocolo de Calibración y Mantenimiento de Generador',
                             prefixIcon: Icon(Icons.rule, size: 20),
                           ),
                           validator: (val) => (val == null || val.trim().isEmpty) ? 'El nombre es obligatorio' : null,
@@ -281,104 +549,230 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                         const SizedBox(height: 20),
 
-                        // Pasos Técnicos del Protocolo
+                        // Barra Superior de Etapas y Pasos
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${steps.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final newStep = await _showAddStepDialog(context);
-                                if (newStep != null) {
-                                  setDialogState(() => steps.add(newStep));
-                                }
-                              },
-                              icon: const Icon(Icons.add_circle, size: 16),
-                              label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ESTRUCTURA DE ETAPAS Y PASOS TÉCNICOS (${steps.length} pasos en ${stages.length} etapas)',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                ),
+                                const Text(
+                                  'Organiza el procedimiento en fases lógicas con pasos obligatorios u opcionales',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final newStage = await _showAddStageDialog(context, existingStagesCount: stages.length);
+                                    if (newStage != null) {
+                                      setDialogState(() => stages.add(newStage));
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_to_photos, size: 15, color: AppColors.primary),
+                                  label: const Text('+ AÑADIR ETAPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final newStep = await _showAddStepDialog(context, stages: stages);
+                                    if (newStep != null) {
+                                      setDialogState(() => steps.add(newStep));
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_circle, size: 15),
+                                  label: const Text('+ AGREGAR PASO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
 
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: steps.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Center(child: Text('No hay pasos cargados en este protocolo. Presione "AGREGAR PASO AL PROTOCOLO".', style: TextStyle(color: AppColors.textMuted, fontSize: 12))),
-                                )
-                              : Column(
-                                  children: steps.asMap().entries.map((entry) {
-                                    final idx = entry.key + 1;
-                                    final step = entry.value;
+                        // Lista Agrupada por Etapas
+                        ...stages.map((stage) {
+                          final stageSteps = steps.where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == stages.first)).toList();
 
-                                    String stepTypeLabel = 'Inspección Sí/No';
-                                    if (step.type == ChecklistItemType.numericMeasurement) {
-                                      stepTypeLabel = 'Medición (${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""})';
-                                    } else if (step.type == ChecklistItemType.photoRequired) {
-                                      stepTypeLabel = 'Evidencia fotográfica obligatoria';
-                                    }
-
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 12,
-                                            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                                            child: Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                                Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                                              ],
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                                    border: const Border(bottom: BorderSide(color: AppColors.border)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.layers_outlined, size: 18, color: AppColors.primary),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              stage.name,
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                                             ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
-                                            tooltip: 'Modificar este paso',
-                                            onPressed: () async {
-                                              final edited = await _showAddStepDialog(context, initialStep: step);
-                                              if (edited != null) {
-                                                setDialogState(() {
-                                                  steps[entry.key] = edited;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                                            tooltip: 'Eliminar este paso',
-                                            onPressed: () {
-                                              setDialogState(() => steps.removeAt(entry.key));
-                                            },
-                                          ),
-                                        ],
+                                            if (stage.description.isNotEmpty)
+                                              Text(
+                                                stage.description,
+                                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                              ),
+                                          ],
+                                        ),
                                       ),
-                                    );
-                                  }).toList(),
+                                      TextButton.icon(
+                                        onPressed: () async {
+                                          final newStep = await _showAddStepDialog(
+                                            context,
+                                            stages: stages,
+                                            defaultStageId: stage.id,
+                                          );
+                                          if (newStep != null) {
+                                            setDialogState(() => steps.add(newStep));
+                                          }
+                                        },
+                                        icon: const Icon(Icons.add, size: 14),
+                                        label: const Text('Paso en esta etapa', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.primary,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ),
+                                      if (stages.length > 1)
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                          tooltip: 'Eliminar esta etapa',
+                                          onPressed: () {
+                                            setDialogState(() {
+                                              stages.remove(stage);
+                                              final fallbackId = stages.first.id;
+                                              for (int i = 0; i < steps.length; i++) {
+                                                if (steps[i].stageId == stage.id) {
+                                                  steps[i] = steps[i].copyWith(stageId: fallbackId, stageName: stages.first.name);
+                                                }
+                                              }
+                                            });
+                                          },
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                        ),
+                                if (stageSteps.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: Center(
+                                      child: Text(
+                                        'Sin pasos cargados en esta etapa. Haz clic en "Paso en esta etapa" para añadir.',
+                                        style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Column(
+                                      children: stageSteps.map((step) {
+                                        final sIdx = steps.indexOf(step) + 1;
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.surface,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 11,
+                                                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                                                child: Text('$sIdx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                                    const SizedBox(height: 2),
+                                                    Wrap(
+                                                      spacing: 6,
+                                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                                      children: [
+                                                        Text(_getStepTypeLabel(step), style: TextStyle(fontSize: 10, color: _getStepTypeColor(step.type), fontWeight: FontWeight.w600)),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                          decoration: BoxDecoration(
+                                                            color: step.isRequired ? AppColors.danger.withValues(alpha: 0.1) : AppColors.surfaceElevated,
+                                                            borderRadius: BorderRadius.circular(3),
+                                                            border: Border.all(color: step.isRequired ? AppColors.danger.withValues(alpha: 0.4) : AppColors.border),
+                                                          ),
+                                                          child: Text(
+                                                            step.isRequired ? 'OBLIGATORIO' : 'OPCIONAL',
+                                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: step.isRequired ? AppColors.danger : AppColors.textSecondary),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                                tooltip: 'Modificar este paso',
+                                                onPressed: () async {
+                                                  final edited = await _showAddStepDialog(context, stages: stages, initialStep: step);
+                                                  if (edited != null) {
+                                                    final idxInMain = steps.indexOf(step);
+                                                    if (idxInMain >= 0) {
+                                                      setDialogState(() => steps[idxInMain] = edited);
+                                                    }
+                                                  }
+                                                },
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                                tooltip: 'Eliminar este paso',
+                                                onPressed: () {
+                                                  setDialogState(() => steps.remove(step));
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
                       ],
                     ),
                   ),
@@ -403,6 +797,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                       type: selectedType,
                       defaultPriority: selectedPriority,
                       estimatedMinutes: int.tryParse(timeCtrl.text.trim()) ?? 45,
+                      stages: stages,
                       steps: steps,
                     );
 
@@ -455,33 +850,51 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     WorkOrderPriority selectedPriority = orderToEdit?.priority ?? (initialTemplate?.defaultPriority ?? WorkOrderPriority.normal);
     WorkOrderType selectedType = orderToEdit?.type ?? (initialTemplate?.type ?? WorkOrderType.correctivo);
 
+    List<WorkflowStageModel> customStages = List<WorkflowStageModel>.from(
+      orderToEdit?.resolvedStages ?? (initialTemplate?.resolvedStages ?? [
+        const WorkflowStageModel(id: 'stg-1', name: 'Etapa 1: Procedimientos Iniciales', order: 1),
+      ]),
+    );
+
     List<ChecklistItemModel> customSteps = List<ChecklistItemModel>.from(
       orderToEdit?.checklist ?? (initialTemplate?.steps ?? [
         const ChecklistItemModel(
           id: 'step-1',
+          stageId: 'stg-1',
+          stageName: 'Etapa 1: Procedimientos Iniciales',
           title: 'Bloqueo y consignación de energía eléctrica y neumática (LOTO)',
           type: ChecklistItemType.booleanCheck,
+          isRequired: true,
           isCompleted: false,
         ),
         const ChecklistItemModel(
           id: 'step-2',
+          stageId: 'stg-1',
+          stageName: 'Etapa 1: Procedimientos Iniciales',
           title: 'Inspección de desgaste y holguras mecánicas',
           type: ChecklistItemType.booleanCheck,
+          isRequired: true,
           isCompleted: false,
         ),
         const ChecklistItemModel(
           id: 'step-3',
+          stageId: 'stg-1',
+          stageName: 'Etapa 1: Procedimientos Iniciales',
           title: 'Medición de presión de trabajo en régimen',
           type: ChecklistItemType.numericMeasurement,
           unit: 'bar',
           minAcceptable: 3.5,
           maxAcceptable: 6.0,
+          isRequired: true,
           isCompleted: false,
         ),
         const ChecklistItemModel(
           id: 'step-4',
+          stageId: 'stg-1',
+          stageName: 'Etapa 1: Procedimientos Iniciales',
           title: 'Registro fotográfico del estado final y puesta en marcha',
           type: ChecklistItemType.photoRequired,
+          isRequired: true,
           isCompleted: false,
         ),
       ]),
@@ -546,6 +959,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                       descCtrl.text = tpl.description;
                                       selectedType = tpl.type;
                                       selectedPriority = tpl.defaultPriority;
+                                      customStages = List<WorkflowStageModel>.from(tpl.resolvedStages);
                                       customSteps = List<ChecklistItemModel>.from(tpl.steps);
                                     });
                                   }
@@ -773,21 +1187,43 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${customSteps.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary)),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final newStep = await _showAddStepDialog(context);
-                                if (newStep != null) {
-                                  setDialogState(() => customSteps.add(newStep));
-                                }
-                              },
-                              icon: const Icon(Icons.add_circle, size: 16),
-                              label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              ),
+                            Text(
+                              'PASOS Y ETAPAS DEL PROTOCOLO (${customSteps.length} pasos en ${customStages.length} etapas)',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final newStage = await _showAddStageDialog(context, existingStagesCount: customStages.length);
+                                    if (newStage != null) {
+                                      setDialogState(() => customStages.add(newStage));
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_to_photos, size: 14, color: AppColors.primary),
+                                  label: const Text('AÑADIR ETAPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final newStep = await _showAddStepDialog(context, stages: customStages);
+                                    if (newStep != null) {
+                                      setDialogState(() => customSteps.add(newStep));
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_circle, size: 16),
+                                  label: const Text('AGREGAR PASO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -803,64 +1239,128 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                           child: customSteps.isEmpty
                               ? const Padding(
                                   padding: EdgeInsets.all(16),
-                                  child: Center(child: Text('No hay pasos agregados. Presiona "Agregar Paso" o carga una plantilla.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                                  child: Center(child: Text('No hay pasos agregados. Presiona "AGREGAR PASO" o carga una plantilla.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
                                 )
                               : Column(
-                                  children: customSteps.asMap().entries.map((entry) {
-                                    final idx = entry.key + 1;
-                                    final step = entry.value;
-
-                                    String subtitle = 'Inspección Sí/No';
-                                    if (step.type == ChecklistItemType.numericMeasurement) {
-                                      subtitle = 'Medición (${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""})';
-                                    } else if (step.type == ChecklistItemType.photoRequired) {
-                                      subtitle = 'Foto obligatoria requerida';
-                                    }
-
+                                  children: customStages.map((stage) {
+                                    final stageSteps = customSteps.where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == customStages.first)).toList();
                                     return Container(
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      margin: const EdgeInsets.only(bottom: 8),
                                       decoration: BoxDecoration(
                                         color: AppColors.surface,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
                                       ),
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          CircleAvatar(
-                                            radius: 12,
-                                            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                                            child: Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary.withValues(alpha: 0.08),
+                                              borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                                              border: const Border(bottom: BorderSide(color: AppColors.border)),
+                                            ),
+                                            child: Row(
                                               children: [
-                                                Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                                Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                                const Icon(Icons.layers_outlined, size: 15, color: AppColors.primary),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(stage.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                                ),
+                                                TextButton.icon(
+                                                  onPressed: () async {
+                                                    final newStep = await _showAddStepDialog(context, stages: customStages, defaultStageId: stage.id);
+                                                    if (newStep != null) {
+                                                      setDialogState(() => customSteps.add(newStep));
+                                                    }
+                                                  },
+                                                  icon: const Icon(Icons.add, size: 13),
+                                                  label: const Text('Paso', style: TextStyle(fontSize: 11)),
+                                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                                ),
+                                                if (customStages.length > 1)
+                                                  IconButton(
+                                                    icon: const Icon(Icons.delete_outline, size: 15, color: AppColors.danger),
+                                                    tooltip: 'Eliminar etapa',
+                                                    splashRadius: 14,
+                                                    onPressed: () {
+                                                      setDialogState(() {
+                                                        customStages.remove(stage);
+                                                        final fallbackId = customStages.first.id;
+                                                        for (int i = 0; i < customSteps.length; i++) {
+                                                          if (customSteps[i].stageId == stage.id) {
+                                                            customSteps[i] = customSteps[i].copyWith(stageId: fallbackId, stageName: customStages.first.name);
+                                                          }
+                                                        }
+                                                      });
+                                                    },
+                                                  ),
                                               ],
                                             ),
                                           ),
-                                          IconButton(
-                                            icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
-                                            tooltip: 'Modificar este paso',
-                                            onPressed: () async {
-                                              final edited = await _showAddStepDialog(context, initialStep: step);
-                                              if (edited != null) {
-                                                setDialogState(() {
-                                                  customSteps[entry.key] = edited;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                                            tooltip: 'Eliminar este paso',
-                                            onPressed: () {
-                                              setDialogState(() => customSteps.removeAt(entry.key));
-                                            },
-                                          ),
+                                          if (stageSteps.isEmpty)
+                                            const Padding(
+                                              padding: EdgeInsets.all(8),
+                                              child: Text('Sin pasos en esta etapa aún.', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                                            )
+                                          else
+                                            ...stageSteps.map((step) {
+                                              final idx = customSteps.indexOf(step) + 1;
+                                              final badgeText = _getStepTypeLabel(step);
+                                              final badgeColor = _getStepTypeColor(step.type);
+
+                                              return Container(
+                                                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.surfaceElevated,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: AppColors.border.withValues(alpha: 0.4)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    CircleAvatar(
+                                                      radius: 11,
+                                                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                                      child: Text('$idx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                                          Wrap(
+                                                            spacing: 6,
+                                                            children: [
+                                                              Text(badgeText, style: TextStyle(fontSize: 10, color: badgeColor, fontWeight: FontWeight.w600)),
+                                                              Text(step.isRequired ? '• Obligatorio' : '• Opcional', style: TextStyle(fontSize: 10, color: step.isRequired ? AppColors.danger : AppColors.textSecondary)),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                                      tooltip: 'Modificar este paso',
+                                                      onPressed: () async {
+                                                        final edited = await _showAddStepDialog(context, stages: customStages, initialStep: step);
+                                                        if (edited != null) {
+                                                          final sIdx = customSteps.indexOf(step);
+                                                          if (sIdx >= 0) setDialogState(() => customSteps[sIdx] = edited);
+                                                        }
+                                                      },
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                                      tooltip: 'Eliminar este paso',
+                                                      onPressed: () => setDialogState(() => customSteps.remove(step)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }),
                                         ],
                                       ),
                                     );
@@ -895,6 +1395,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                       assignedCrew: assignToCrew ? selectedCrewName : null,
                       scheduledDate: isEditing ? orderToEdit.scheduledDate : DateTime.now(),
                       safetyProtocols: isEditing ? orderToEdit.safetyProtocols : const ['EPP Completo', 'Bloqueo LOTO', 'Permiso de Trabajo'],
+                      stages: customStages,
                       checklist: customSteps,
                       updatedAt: DateTime.now(),
                     );
@@ -1215,30 +1716,46 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                       ],
                     ),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final newStep = await _showAddStepDialog(context);
-                        if (newStep != null) {
-                          final updatedSteps = List<ChecklistItemModel>.from(order.checklist)..add(newStep);
-                          final updatedOrder = order.copyWith(
-                            checklist: updatedSteps,
-                            updatedAt: DateTime.now(),
-                          );
-                          await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Paso "${newStep.title}" agregado al protocolo'), backgroundColor: AppColors.success),
-                            );
-                          }
-                        }
-                      },
-                      icon: const Icon(Icons.add, size: 14, color: AppColors.primary),
-                      label: const Text('Agregar Paso', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        side: const BorderSide(color: AppColors.border),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final newStage = await _showAddStageDialog(context, existingStagesCount: order.resolvedStages.length);
+                            if (newStage != null) {
+                              final updatedStages = List<WorkflowStageModel>.from(order.resolvedStages)..add(newStage);
+                              final updatedOrder = order.copyWith(stages: updatedStages, updatedAt: DateTime.now());
+                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                            }
+                          },
+                          icon: const Icon(Icons.add_to_photos, size: 13, color: AppColors.primary),
+                          label: const Text('Añadir Etapa', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            side: const BorderSide(color: AppColors.border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final newStep = await _showAddStepDialog(context, stages: order.resolvedStages);
+                            if (newStep != null) {
+                              final updatedSteps = List<ChecklistItemModel>.from(order.checklist)..add(newStep);
+                              final updatedOrder = order.copyWith(checklist: updatedSteps, updatedAt: DateTime.now());
+                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                            }
+                          },
+                          icon: const Icon(Icons.add_circle, size: 14),
+                          label: const Text('Agregar Paso', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1271,91 +1788,130 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                     ),
                   )
                 else
-                  ...order.checklist.asMap().entries.map((entry) {
-                    final idx = entry.key + 1;
-                    final item = entry.value;
-
-                    String stepTypeLabel = 'Inspección Sí/No';
-                    if (item.type == ChecklistItemType.numericMeasurement) {
-                      stepTypeLabel = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
-                    } else if (item.type == ChecklistItemType.photoRequired) {
-                      stepTypeLabel = 'Evidencia fotográfica obligatoria';
-                    }
+                  ...order.resolvedStages.map((stage) {
+                    final stageSteps = order.checklist.where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == order.resolvedStages.first)).toList();
 
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceLight,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(
-                            radius: 12,
-                            backgroundColor: item.isCompleted ? AppColors.successContainer : AppColors.primaryContainer,
-                            child: item.isCompleted
-                                ? const Icon(Icons.check, size: 14, color: AppColors.success)
-                                : Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.06),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                              border: const Border(bottom: BorderSide(color: AppColors.border)),
+                            ),
+                            child: Row(
                               children: [
-                                Text(item.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                                Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                const Icon(Icons.layers_outlined, size: 14, color: AppColors.primary),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(stage.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final newStep = await _showAddStepDialog(context, stages: order.resolvedStages, defaultStageId: stage.id);
+                                    if (newStep != null) {
+                                      final updatedSteps = List<ChecklistItemModel>.from(order.checklist)..add(newStep);
+                                      final updatedOrder = order.copyWith(checklist: updatedSteps, updatedAt: DateTime.now());
+                                      await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add, size: 13),
+                                  label: const Text('Paso', style: TextStyle(fontSize: 10)),
+                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                ),
                               ],
                             ),
                           ),
-                          if (item.numericValue != null)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryContainer,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                              ),
-                              child: Text(
-                                '${item.numericValue} ${item.unit ?? ""}',
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
-                              ),
-                            ),
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.textSecondary),
-                            splashRadius: 16,
-                            tooltip: 'Modificar paso',
-                            onPressed: () async {
-                              final edited = await _showAddStepDialog(context, initialStep: item);
-                              if (edited != null) {
-                                final updatedSteps = List<ChecklistItemModel>.from(order.checklist);
-                                final sIdx = updatedSteps.indexWhere((s) => s.id == item.id);
-                                if (sIdx >= 0) {
-                                  updatedSteps[sIdx] = edited;
-                                  final updatedOrder = order.copyWith(
-                                    checklist: updatedSteps,
-                                    updatedAt: DateTime.now(),
-                                  );
-                                  await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                                }
-                              }
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 15, color: AppColors.danger),
-                            splashRadius: 16,
-                            tooltip: 'Eliminar paso',
-                            onPressed: () async {
-                              final updatedSteps = order.checklist.where((s) => s.id != item.id).toList();
-                              final updatedOrder = order.copyWith(
-                                checklist: updatedSteps,
-                                updatedAt: DateTime.now(),
+                          if (stageSteps.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Text('Sin pasos en esta etapa', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                            )
+                          else
+                            ...stageSteps.map((item) {
+                              final idx = order.checklist.indexOf(item) + 1;
+                              final stepTypeLabel = _getStepTypeLabel(item);
+
+                              return Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 11,
+                                      backgroundColor: item.isCompleted ? AppColors.successContainer : AppColors.primaryContainer,
+                                      child: item.isCompleted
+                                          ? const Icon(Icons.check, size: 13, color: AppColors.success)
+                                          : Text('$idx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(item.title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                          Text(stepTypeLabel, style: const TextStyle(fontSize: 9, color: AppColors.textSecondary)),
+                                        ],
+                                      ),
+                                    ),
+                                    if (item.numericValue != null)
+                                      Container(
+                                        margin: const EdgeInsets.only(right: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryContainer,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '${item.numericValue} ${item.unit ?? ""}',
+                                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                        ),
+                                      ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, size: 14, color: AppColors.textSecondary),
+                                      splashRadius: 14,
+                                      tooltip: 'Modificar paso',
+                                      onPressed: () async {
+                                        final edited = await _showAddStepDialog(context, stages: order.resolvedStages, initialStep: item);
+                                        if (edited != null) {
+                                          final updatedSteps = List<ChecklistItemModel>.from(order.checklist);
+                                          final sIdx = updatedSteps.indexWhere((s) => s.id == item.id);
+                                          if (sIdx >= 0) {
+                                            updatedSteps[sIdx] = edited;
+                                            final updatedOrder = order.copyWith(checklist: updatedSteps, updatedAt: DateTime.now());
+                                            await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 14, color: AppColors.danger),
+                                      splashRadius: 14,
+                                      tooltip: 'Eliminar paso',
+                                      onPressed: () async {
+                                        final updatedSteps = order.checklist.where((s) => s.id != item.id).toList();
+                                        final updatedOrder = order.copyWith(checklist: updatedSteps, updatedAt: DateTime.now());
+                                        await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                      },
+                                    ),
+                                  ],
+                                ),
                               );
-                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
-                            },
-                          ),
+                            }),
                         ],
                       ),
                     );
@@ -1981,105 +2537,237 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                     ),
                     const Divider(height: 24),
 
-                    // Pasos técnicos del protocolo
+                    // Pasos técnicos del protocolo organizados por Etapas
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'PASOS TÉCNICOS DEL PROTOCOLO (${template.steps.length}):',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.primary),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ESTRUCTURA DE ETAPAS Y PASOS (${template.steps.length} pasos en ${template.resolvedStages.length} etapas):',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.primary),
+                            ),
+                            const Text(
+                              'Flujo secuencial de ejecución en planta',
+                              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
+                          ],
                         ),
-                        OutlinedButton.icon(
-                          onPressed: () async {
-                            final newStep = await _showAddStepDialog(context);
-                            if (newStep != null) {
-                              final updated = template.copyWith(
-                                steps: List<ChecklistItemModel>.from(template.steps)..add(newStep),
-                              );
-                              ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(updated);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Paso "${newStep.title}" agregado al protocolo ${template.name}'), backgroundColor: AppColors.success),
-                                );
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.add_circle, size: 14, color: AppColors.primary),
-                          label: const Text('AGREGAR PASO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final newStage = await _showAddStageDialog(context, existingStagesCount: template.resolvedStages.length);
+                                if (newStage != null) {
+                                  ref.read(taskTemplatesProvider.notifier).addStageToTemplate(template.id, newStage);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Etapa "${newStage.name}" agregada a ${template.name}'), backgroundColor: AppColors.success),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.add_to_photos, size: 13, color: AppColors.primary),
+                              label: const Text('AÑADIR ETAPA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.border),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final newStep = await _showAddStepDialog(context, stages: template.resolvedStages);
+                                if (newStep != null) {
+                                  ref.read(taskTemplatesProvider.notifier).addStepToTemplate(template.id, newStep);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Paso "${newStep.title}" agregado al protocolo ${template.name}'), backgroundColor: AppColors.success),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.add_circle, size: 14),
+                              label: const Text('AGREGAR PASO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
 
-                    ...template.steps.asMap().entries.map((stepEntry) {
-                      final sIdx = stepEntry.key + 1;
-                      final step = stepEntry.value;
-
-                      String badgeText = 'Inspección Sí/No';
-                      Color badgeColor = AppColors.primary;
-                      if (step.type == ChecklistItemType.numericMeasurement) {
-                        badgeText = 'Medición: ${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""}';
-                        badgeColor = AppColors.warning;
-                      } else if (step.type == ChecklistItemType.photoRequired) {
-                        badgeText = 'Foto Obligatoria';
-                        badgeColor = AppColors.paused;
-                      }
+                    ...template.resolvedStages.map((stage) {
+                      final stageSteps = template.steps.where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == template.resolvedStages.first)).toList();
 
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.border),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 11,
-                              backgroundColor: AppColors.primaryContainer,
-                              child: Text('$sIdx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                            ),
-                            const SizedBox(width: 8),
+                            // Encabezado de la etapa
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                               decoration: BoxDecoration(
-                                color: badgeColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                                color: AppColors.primary.withValues(alpha: 0.06),
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                                border: const Border(bottom: BorderSide(color: AppColors.border)),
                               ),
-                              child: Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor)),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.layers_outlined, size: 16, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          stage.name,
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                        ),
+                                        if (stage.description.isNotEmpty)
+                                          Text(
+                                            stage.description,
+                                            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () async {
+                                      final newStep = await _showAddStepDialog(
+                                        context,
+                                        stages: template.resolvedStages,
+                                        defaultStageId: stage.id,
+                                      );
+                                      if (newStep != null) {
+                                        ref.read(taskTemplatesProvider.notifier).addStepToTemplate(template.id, newStep);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.add, size: 14),
+                                    label: const Text('Paso en esta etapa', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                  if (template.resolvedStages.length > 1)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                      tooltip: 'Eliminar esta etapa',
+                                      splashRadius: 16,
+                                      onPressed: () {
+                                        ref.read(taskTemplatesProvider.notifier).deleteStageFromTemplate(template.id, stage.id);
+                                      },
+                                    ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 6),
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
-                              tooltip: 'Modificar este paso',
-                              onPressed: () async {
-                                final edited = await _showAddStepDialog(context, initialStep: step);
-                                if (edited != null) {
-                                  final newSteps = List<ChecklistItemModel>.from(template.steps);
-                                  newSteps[stepEntry.key] = edited;
-                                  ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(template.copyWith(steps: newSteps));
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                              tooltip: 'Eliminar este paso',
-                              onPressed: () {
-                                final newSteps = List<ChecklistItemModel>.from(template.steps)..removeAt(stepEntry.key);
-                                ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(template.copyWith(steps: newSteps));
-                              },
-                            ),
+
+                            if (stageSteps.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Center(
+                                  child: Text('Sin pasos en esta etapa aún. Clic en "Paso en esta etapa".', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                                ),
+                              )
+                            else
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Column(
+                                  children: stageSteps.map((step) {
+                                    final sIdx = template.steps.indexOf(step) + 1;
+                                    final badgeText = _getStepTypeLabel(step);
+                                    final badgeColor = _getStepTypeColor(step.type);
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 11,
+                                            backgroundColor: AppColors.primaryContainer,
+                                            child: Text('$sIdx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                                if (step.description.isNotEmpty)
+                                                  Text(step.description, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: badgeColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor)),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: step.isRequired ? AppColors.danger.withValues(alpha: 0.1) : AppColors.surfaceElevated,
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: step.isRequired ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
+                                            ),
+                                            child: Text(
+                                              step.isRequired ? 'OBLIGATORIO' : 'OPCIONAL',
+                                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: step.isRequired ? AppColors.danger : AppColors.textSecondary),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
+                                            tooltip: 'Modificar este paso',
+                                            splashRadius: 16,
+                                            onPressed: () async {
+                                              final edited = await _showAddStepDialog(context, stages: template.resolvedStages, initialStep: step);
+                                              if (edited != null) {
+                                                ref.read(taskTemplatesProvider.notifier).updateStepInTemplate(template.id, edited);
+                                              }
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                            tooltip: 'Eliminar este paso',
+                                            splashRadius: 16,
+                                            onPressed: () {
+                                              ref.read(taskTemplatesProvider.notifier).deleteStepFromTemplate(template.id, step.id);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
                           ],
                         ),
                       );
