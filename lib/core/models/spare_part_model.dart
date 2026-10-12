@@ -17,6 +17,8 @@ class SparePartModel {
     this.consumedQuantity = 0,
   });
 
+  bool get isLowStock => stockAvailable <= 5;
+
   SparePartModel copyWith({
     String? id,
     String? code,

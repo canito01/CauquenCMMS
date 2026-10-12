@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../models/asset_model.dart';
 import '../models/spare_part_model.dart';
 import '../models/sync_item_model.dart';
 import '../models/user_model.dart';
@@ -63,10 +64,48 @@ class InventoryNotifier extends Notifier<List<SparePartModel>> {
     }).toList();
     await storage.saveSpareParts(state);
   }
+
+  Future<void> addOrUpdatePart(SparePartModel part) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<SparePartModel>.from(state);
+    final idx = current.indexWhere((p) => p.id == part.id);
+    if (idx >= 0) {
+      current[idx] = part;
+    } else {
+      current.insert(0, part);
+    }
+    state = current;
+    await storage.saveSpareParts(current);
+  }
 }
 
 final inventoryProvider =
     NotifierProvider<InventoryNotifier, List<SparePartModel>>(InventoryNotifier.new);
+
+// Proveedor de Activos / Equipos de Planta
+class AssetsNotifier extends Notifier<List<AssetModel>> {
+  @override
+  List<AssetModel> build() {
+    final storage = ref.watch(localStorageProvider);
+    return storage.getAssets();
+  }
+
+  Future<void> addOrUpdateAsset(AssetModel asset) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<AssetModel>.from(state);
+    final idx = current.indexWhere((a) => a.id == asset.id);
+    if (idx >= 0) {
+      current[idx] = asset;
+    } else {
+      current.insert(0, asset);
+    }
+    state = current;
+    await storage.saveAssets(current);
+  }
+}
+
+final assetsProvider =
+    NotifierProvider<AssetsNotifier, List<AssetModel>>(AssetsNotifier.new);
 
 // Proveedor de Cola de Sincronización (Riverpod 3 Notifier)
 class SyncQueueNotifier extends Notifier<List<SyncQueueItem>> {
@@ -148,6 +187,26 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
   void refreshFromStorage() {
     final storage = ref.read(localStorageProvider);
     state = storage.getWorkOrders();
+  }
+
+  // Crear nueva orden de trabajo desde el panel de administración
+  Future<void> createWorkOrder(WorkOrderModel order) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final current = List<WorkOrderModel>.from(state)..insert(0, order);
+    state = current;
+    await storage.saveWorkOrders(current);
+
+    await ref.read(syncQueueProvider.notifier).enqueue(
+          entityId: order.id,
+          actionType: SyncActionType.statusChange,
+          description: 'Nueva OT creada: ${order.orderNumber}',
+        );
+
+    if (isOnline && SupabaseConfig.isConfigured) {
+      await ref.read(syncQueueProvider.notifier).processSyncQueue();
+    }
   }
 
   // Iniciar ejecución de OT

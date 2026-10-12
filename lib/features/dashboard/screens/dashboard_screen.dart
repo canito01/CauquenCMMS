@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
@@ -47,8 +48,14 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
-        actions: const [
-          Padding(
+        actions: [
+          if (currentUser?.role == UserRole.supervisor || currentUser?.role == UserRole.admin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings, color: AppColors.primary),
+              tooltip: 'Portal Administrativo Web',
+              onPressed: () => context.go('/admin'),
+            ),
+          const Padding(
             padding: EdgeInsets.only(right: 16),
             child: ConnectivityBadge(),
           ),

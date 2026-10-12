@@ -34,14 +34,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
 
     if (success && mounted) {
-      context.go('/');
+      final user = ref.read(authProvider).user;
+      if (user?.role == UserRole.supervisor || user?.role == UserRole.admin) {
+        context.go('/admin');
+      } else {
+        context.go('/');
+      }
     }
   }
 
   Future<void> _handleQuickLogin(UserModel user) async {
     await ref.read(authProvider.notifier).quickLoginAs(user);
     if (mounted) {
-      context.go('/');
+      if (user.role == UserRole.supervisor || user.role == UserRole.admin) {
+        context.go('/admin');
+      } else {
+        context.go('/');
+      }
     }
   }
 

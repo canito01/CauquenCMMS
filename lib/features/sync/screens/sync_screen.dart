@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/constants/app_colors.dart';
@@ -120,6 +121,25 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
             ),
           ),
           const SizedBox(height: 14),
+
+          // Portal Administrativo Web si es supervisor o admin
+          if (user?.role == UserRole.supervisor || user?.role == UserRole.admin) ...[
+            Card(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.primary),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.admin_panel_settings, color: AppColors.primary, size: 30),
+                title: const Text('Portal Administrativo Web', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Gestione órdenes, inventarios, KPIs y catálogo de activos'),
+                trailing: const Icon(Icons.arrow_forward, color: AppColors.primary),
+                onTap: () => context.go('/admin'),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Tarjeta de Estado de Base de Datos Cloud (Supabase)
           Container(
