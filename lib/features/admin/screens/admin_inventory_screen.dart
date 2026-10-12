@@ -34,11 +34,15 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
   // --- Modal para Registrar o Modificar Repuesto ---
   void _showPartDialog({SparePartModel? partToEdit}) {
     final isEditing = partToEdit != null;
+    final formKey = GlobalKey<FormState>();
     final codeCtrl = TextEditingController(text: partToEdit?.code ?? '');
     final descCtrl = TextEditingController(text: partToEdit?.description ?? '');
     final locCtrl = TextEditingController(text: partToEdit?.locationWarehouse ?? '');
     final stockCtrl = TextEditingController(text: partToEdit != null ? partToEdit.stockAvailable.toString() : '10');
-    String unit = partToEdit?.unit ?? 'un';
+    
+    final standardUnits = ['un', 'lts', 'l', 'kg', 'g', 'mts', 'm', 'jgo', 'par', 'caja'];
+    final unitOptions = {...standardUnits, if (partToEdit != null) partToEdit.unit}.toList();
+    String unit = (partToEdit != null && unitOptions.contains(partToEdit.unit)) ? partToEdit.unit : 'un';
 
     showDialog(
       context: context,
@@ -56,50 +60,113 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 ],
               ),
               content: SizedBox(
-                width: 500,
+                width: 520,
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: codeCtrl,
-                        decoration: const InputDecoration(labelText: 'Código de Parte / SKU', hintText: 'Ej: VAL-NEU-52'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descCtrl,
-                        decoration: const InputDecoration(labelText: 'Descripción del Insumo / Pieza', hintText: 'Ej: Válvula biestable 5/2 pilotada'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: locCtrl,
-                        decoration: const InputDecoration(labelText: 'Ubicación en Almacén Central', hintText: 'Ej: Estante B-02 / Gaveta 4'),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          if (!isEditing) ...[
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Expanded(
-                              child: TextField(
-                                controller: stockCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Stock Inicial Disponible'),
+                              child: TextFormField(
+                                controller: codeCtrl,
+                                textCapitalization: TextCapitalization.characters,
+                                decoration: const InputDecoration(
+                                  labelText: 'Código de Parte / SKU *',
+                                  hintText: 'Ej: VAL-NEU-52',
+                                  prefixIcon: Icon(Icons.qr_code, size: 20),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return 'El código SKU es obligatorio';
+                                  }
+                                  return null;
+                                },
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            if (!isEditing) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.auto_awesome, color: AppColors.primary),
+                                tooltip: 'Generar código SKU automático',
+                                onPressed: () {
+                                  final genCode = 'REP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+                                  setDialogState(() => codeCtrl.text = genCode);
+                                },
+                              ),
+                            ],
                           ],
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: unit,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Unidad de Medida'),
-                              items: ['un', 'lts', 'kg', 'mts', 'jgo'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                              onChanged: (val) => setDialogState(() => unit = val ?? 'un'),
-                            ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: descCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Descripción del Insumo / Pieza *',
+                            hintText: 'Ej: Válvula biestable 5/2 pilotada',
+                            prefixIcon: Icon(Icons.description_outlined, size: 20),
                           ),
-                        ],
-                      ),
-                    ],
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'La descripción es obligatoria';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: locCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Ubicación en Almacén Central',
+                            hintText: 'Ej: Estante B-02 / Gaveta 4',
+                            prefixIcon: Icon(Icons.warehouse_outlined, size: 20),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!isEditing) ...[
+                              Expanded(
+                                child: TextFormField(
+                                  controller: stockCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Stock Inicial Disponible *',
+                                    prefixIcon: Icon(Icons.tag, size: 20),
+                                  ),
+                                  validator: (val) {
+                                    if (val == null || val.trim().isEmpty) {
+                                      return 'Ingrese cantidad';
+                                    }
+                                    final numVal = int.tryParse(val.trim());
+                                    if (numVal == null || numVal < 0) {
+                                      return 'Número entero ≥ 0';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: unit,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(
+                                  labelText: 'Unidad de Medida',
+                                  prefixIcon: Icon(Icons.straighten, size: 20),
+                                ),
+                                items: unitOptions.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                                onChanged: (val) => setDialogState(() => unit = val ?? 'un'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -107,7 +174,7 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
-                    if (codeCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) return;
+                    if (!formKey.currentState!.validate()) return;
 
                     final qty = isEditing ? partToEdit.stockAvailable : (int.tryParse(stockCtrl.text.trim()) ?? 0);
                     final newPart = SparePartModel(
@@ -126,7 +193,7 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(isEditing ? 'Repuesto ${newPart.code} actualizado' : 'Repuesto ${newPart.code} incorporado'),
+                          content: Text(isEditing ? 'Repuesto ${newPart.code} actualizado' : 'Repuesto ${newPart.code} incorporado al inventario'),
                           backgroundColor: AppColors.success,
                         ),
                       );
@@ -145,9 +212,27 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
   // --- Modal para Entrada o Salida Manual de Stock ---
   void _showStockAdjustmentDialog({SparePartModel? preselectedPart, required bool isAddition}) {
     final parts = ref.read(inventoryProvider);
-    if (parts.isEmpty) return;
+    if (parts.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('Catálogo de Repuestos Vacío'),
+          content: const Text('No hay ningún repuesto en inventario actualmente. Por favor, crea un nuevo repuesto con el botón "NUEVO REPUESTO" antes de registrar entradas o salidas.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
+          ],
+        ),
+      );
+      return;
+    }
 
-    SparePartModel selectedPart = preselectedPart ?? parts.first;
+    final formKey = GlobalKey<FormState>();
+    String selectedPartId = preselectedPart?.id ?? parts.first.id;
+    if (!parts.any((p) => p.id == selectedPartId)) {
+      selectedPartId = parts.first.id;
+    }
+
     final qtyCtrl = TextEditingController(text: '1');
     final reasonCtrl = TextEditingController(
       text: isAddition ? 'Recepción de remito / Compra a proveedor' : 'Retiro para mantenimiento preventivo',
@@ -161,6 +246,7 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final deltaColor = isAddition ? AppColors.success : AppColors.danger;
+            final currentPart = parts.firstWhere((p) => p.id == selectedPartId, orElse: () => parts.first);
 
             return AlertDialog(
               backgroundColor: AppColors.surface,
@@ -173,84 +259,106 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 ],
               ),
               content: SizedBox(
-                width: 500,
+                width: 520,
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Selector de Repuesto
-                      DropdownButtonFormField<SparePartModel>(
-                        initialValue: selectedPart,
-                        dropdownColor: AppColors.surfaceElevated,
-                        decoration: const InputDecoration(labelText: 'Repuesto / Pieza'),
-                        items: parts.map((p) {
-                          return DropdownMenuItem(
-                            value: p,
-                            child: Text(
-                              '${p.code} - ${p.description} (Stock: ${p.stockAvailable} ${p.unit})',
-                              style: const TextStyle(fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedPart = val);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Indicador de Stock Actual
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Selector de Repuesto por ID
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedPartId,
+                          dropdownColor: AppColors.surfaceElevated,
+                          decoration: const InputDecoration(labelText: 'Repuesto / Insumo *'),
+                          items: parts.map((p) {
+                            return DropdownMenuItem<String>(
+                              value: p.id,
+                              child: Text(
+                                '${p.code} - ${p.description} (Stock: ${p.stockAvailable} ${p.unit})',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => selectedPartId = val);
+                            }
+                          },
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        const SizedBox(height: 14),
+
+                        // Indicador de Stock Actual
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Stock Actual en Almacén:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                              Text(
+                                '${currentPart.stockAvailable} ${currentPart.unit}',
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Stock Actual en Almacén:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            Text(
-                              '${selectedPart.stockAvailable} ${selectedPart.unit}',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                            Expanded(
+                              child: TextFormField(
+                                controller: qtyCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: isAddition ? 'Cantidad a Ingresar (+) *' : 'Cantidad a Retirar (-) *',
+                                  prefixIcon: Icon(isAddition ? Icons.add : Icons.remove, color: deltaColor),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return 'Ingrese cantidad';
+                                  }
+                                  final q = int.tryParse(val.trim());
+                                  if (q == null || q <= 0) {
+                                    return 'Debe ser mayor a 0';
+                                  }
+                                  if (!isAddition && q > currentPart.stockAvailable) {
+                                    return 'Stock insuficiente (disp: ${currentPart.stockAvailable})';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              height: 52,
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                              child: Text(currentPart.unit, style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
 
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: qtyCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: isAddition ? 'Cantidad a Ingresar (+)' : 'Cantidad a Retirar (-)',
-                                prefixIcon: Icon(isAddition ? Icons.add : Icons.remove, color: deltaColor),
-                              ),
-                            ),
+                        TextFormField(
+                          controller: reasonCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Motivo / Justificación del Movimiento',
+                            hintText: 'Ej: Recepción proveedor, merma, rotura, etc.',
+                            prefixIcon: Icon(Icons.notes, size: 20),
                           ),
-                          const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(10)),
-                            child: Text(selectedPart.unit, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      TextField(
-                        controller: reasonCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Motivo del Movimiento',
-                          hintText: 'Ej: Recepción proveedor, merma, rotura, etc.',
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -259,22 +367,12 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: deltaColor),
                   onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
                     final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
-                    if (qty <= 0) return;
-
-                    if (!isAddition && qty > selectedPart.stockAvailable) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error: No se pueden retirar $qty ${selectedPart.unit}. Stock disponible: ${selectedPart.stockAvailable}'),
-                          backgroundColor: AppColors.danger,
-                        ),
-                      );
-                      return;
-                    }
 
                     final delta = isAddition ? qty : -qty;
                     await ref.read(inventoryProvider.notifier).adjustStock(
-                          partId: selectedPart.id,
+                          partId: currentPart.id,
                           delta: delta,
                           reason: reasonCtrl.text.trim().isEmpty ? (isAddition ? 'Ingreso manual' : 'Salida manual') : reasonCtrl.text.trim(),
                           performedBy: performedBy,
@@ -286,8 +384,8 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                         SnackBar(
                           content: Text(
                             isAddition
-                                ? '¡Ingresaron +$qty ${selectedPart.unit} al stock de ${selectedPart.code}!'
-                                : '¡Se retiraron -$qty ${selectedPart.unit} del stock de ${selectedPart.code}!',
+                                ? '¡Ingresaron +$qty ${currentPart.unit} al stock de ${currentPart.code}!'
+                                : '¡Se retiraron -$qty ${currentPart.unit} del stock de ${currentPart.code}!',
                           ),
                           backgroundColor: deltaColor,
                         ),
@@ -358,8 +456,11 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,7 +470,9 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                       Text('${spareParts.length} artículos en catálogo • $lowStockCount con alerta de stock crítico', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                     ],
                   ),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       ElevatedButton.icon(
                         onPressed: () => _showStockAdjustmentDialog(isAddition: true),
@@ -377,14 +480,12 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                         label: const Text('INGRESO DE STOCK (+)'),
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
                       ),
-                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () => _showStockAdjustmentDialog(isAddition: false),
                         icon: const Icon(Icons.remove_circle, size: 16),
                         label: const Text('SALIDA MANUAL (-)'),
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
                       ),
-                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () => _showPartDialog(),
                         icon: const Icon(Icons.inventory_2, size: 16),

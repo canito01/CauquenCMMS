@@ -40,5 +40,13 @@ class AssetModel {
       lastMaintenance: map['lastMaintenance'] as String? ?? 'N/A',
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AssetModel && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 

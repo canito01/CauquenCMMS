@@ -32,17 +32,34 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
   // --- Modal para Agregar o Modificar Personal ---
   void _showUserDialog({UserModel? userToEdit}) {
     final isEditing = userToEdit != null;
+    final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: userToEdit?.name ?? '');
-    final badgeCtrl = TextEditingController(text: userToEdit?.badge ?? '');
+    final badgeCtrl = TextEditingController(
+      text: userToEdit?.badge ?? 'TEC-${(1000 + ref.read(usersProvider).length + 1)}',
+    );
     final emailCtrl = TextEditingController(text: userToEdit?.email ?? '');
     final phoneCtrl = TextEditingController(text: userToEdit?.phone ?? '');
     final specialtyCtrl = TextEditingController(text: userToEdit?.specialty ?? 'Mecánica Industrial');
 
     UserRole selectedRole = userToEdit?.role ?? UserRole.technician;
-    String selectedShift = userToEdit?.shift ?? 'Turno Mañana (06:00 - 14:00)';
-    String? selectedCrew = userToEdit?.crewName;
+
+    const validShifts = [
+      'Turno Mañana (06:00 - 14:00)',
+      'Turno Tarde (14:00 - 22:00)',
+      'Turno Noche (22:00 - 06:00)',
+      'Turno Rotativo',
+    ];
+    String selectedShift = userToEdit?.shift ?? validShifts.first;
+    if (!validShifts.contains(selectedShift)) {
+      selectedShift = validShifts.first;
+    }
 
     final crews = ref.read(crewsProvider);
+    final validCrewNames = crews.map((c) => c.name).toList();
+    String? selectedCrew = userToEdit?.crewName;
+    if (selectedCrew != null && !validCrewNames.contains(selectedCrew)) {
+      selectedCrew = null;
+    }
 
     showDialog(
       context: context,
@@ -56,104 +73,167 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                 children: [
                   Icon(isEditing ? Icons.edit : Icons.person_add, color: AppColors.primary),
                   const SizedBox(width: 10),
-                  Text(isEditing ? 'Modificar Empleado de Planta' : 'Registrar Nuevo Empleado'),
+                  Text(isEditing ? 'Modificar Empleado / Operario' : 'Dar de Alta Nuevo Operario / Empleado'),
                 ],
               ),
               content: SizedBox(
-                width: 540,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: nameCtrl,
-                              decoration: const InputDecoration(labelText: 'Nombre y Apellido', hintText: 'Ej: Juan Pérez'),
+                width: 560,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: nameCtrl,
+                                autofocus: !isEditing,
+                                decoration: const InputDecoration(
+                                  labelText: 'Nombre y Apellido *',
+                                  hintText: 'Ej: Juan Pérez',
+                                  prefixIcon: Icon(Icons.person_outline, size: 18),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return 'El nombre es obligatorio';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: badgeCtrl,
-                              decoration: const InputDecoration(labelText: 'Legajo de Planta', hintText: 'Ej: TEC-9921'),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: badgeCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Legajo / Código *',
+                                  hintText: 'Ej: TEC-1045',
+                                  prefixIcon: Icon(Icons.badge_outlined, size: 18),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) {
+                                    return 'El legajo es obligatorio';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: emailCtrl,
-                              decoration: const InputDecoration(labelText: 'Correo Electrónico', hintText: 'usuario@planta.com'),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: emailCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Correo Electrónico',
+                                  hintText: 'usuario@planta.com',
+                                  prefixIcon: Icon(Icons.email_outlined, size: 18),
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: phoneCtrl,
-                              decoration: const InputDecoration(labelText: 'Teléfono de Contacto', hintText: '+54 9 11 ...'),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: phoneCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Teléfono de Contacto',
+                                  hintText: '+54 9 11 ...',
+                                  prefixIcon: Icon(Icons.phone_outlined, size: 18),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<UserRole>(
-                              initialValue: selectedRole,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Rol en Sistema'),
-                              items: UserRole.values.map((r) {
-                                return DropdownMenuItem(value: r, child: Text(r.name.toUpperCase(), style: const TextStyle(fontSize: 12)));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setDialogState(() => selectedRole = val);
-                              },
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<UserRole>(
+                                initialValue: selectedRole,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(
+                                  labelText: 'Rol en Sistema *',
+                                  prefixIcon: Icon(Icons.admin_panel_settings_outlined, size: 18),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: UserRole.technician,
+                                    child: Text('Técnico / Operario de Campo', style: TextStyle(fontSize: 12)),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: UserRole.supervisor,
+                                    child: Text('Supervisor de Mantenimiento', style: TextStyle(fontSize: 12)),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: UserRole.admin,
+                                    child: Text('Administrador de Planta', style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setDialogState(() => selectedRole = val);
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedShift,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Turno Operativo'),
-                              items: const [
-                                DropdownMenuItem(value: 'Turno Mañana (06:00 - 14:00)', child: Text('Turno Mañana', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Tarde (14:00 - 22:00)', child: Text('Turno Tarde', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Noche (22:00 - 06:00)', child: Text('Turno Noche', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Rotativo', child: Text('Turno Rotativo', style: TextStyle(fontSize: 12))),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) setDialogState(() => selectedShift = val);
-                              },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedShift,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(
+                                  labelText: 'Turno Operativo *',
+                                  prefixIcon: Icon(Icons.access_time, size: 18),
+                                ),
+                                items: validShifts.map((s) {
+                                  return DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12)));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setDialogState(() => selectedShift = val);
+                                },
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: specialtyCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Especialidad Técnica',
+                            hintText: 'Ej: Mecánica Industrial, Hidráulica, Neumática, PLC',
+                            prefixIcon: Icon(Icons.handyman_outlined, size: 18),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: specialtyCtrl,
-                        decoration: const InputDecoration(labelText: 'Especialidad Técnica', hintText: 'Ej: Hidráulica, Neumática, PLC'),
-                      ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String?>(
-                        initialValue: selectedCrew,
-                        dropdownColor: AppColors.surfaceElevated,
-                        decoration: const InputDecoration(labelText: 'Asignar a Cuadrilla (Opcional)'),
-                        items: [
-                          const DropdownMenuItem(value: null, child: Text('Sin cuadrilla fija (Independiente)', style: TextStyle(fontSize: 12))),
-                          ...crews.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name, style: const TextStyle(fontSize: 12)))),
-                        ],
-                        onChanged: (val) {
-                          setDialogState(() => selectedCrew = val);
-                        },
-                      ),
-                    ],
+                        ),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String?>(
+                          initialValue: selectedCrew,
+                          dropdownColor: AppColors.surfaceElevated,
+                          decoration: const InputDecoration(
+                            labelText: 'Asignar a Cuadrilla (Opcional)',
+                            prefixIcon: Icon(Icons.groups_outlined, size: 18),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Sin cuadrilla fija (Técnico Independiente)', style: TextStyle(fontSize: 12)),
+                            ),
+                            ...crews.map((c) => DropdownMenuItem(
+                                  value: c.name,
+                                  child: Text('${c.name} (${c.shift})', style: const TextStyle(fontSize: 12)),
+                                )),
+                          ],
+                          onChanged: (val) {
+                            setDialogState(() => selectedCrew = val);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -161,7 +241,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty || badgeCtrl.text.trim().isEmpty) return;
+                    if (!formKey.currentState!.validate()) return;
 
                     final user = UserModel(
                       id: isEditing ? userToEdit.id : const Uuid().v4(),
@@ -170,7 +250,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                       badge: badgeCtrl.text.trim().toUpperCase(),
                       role: selectedRole,
                       shift: selectedShift,
-                      specialty: specialtyCtrl.text.trim(),
+                      specialty: specialtyCtrl.text.trim().isEmpty ? 'Mantenimiento General' : specialtyCtrl.text.trim(),
                       phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
                       crewName: selectedCrew,
                     );
@@ -185,13 +265,13 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(isEditing ? 'Empleado ${user.name} actualizado' : 'Empleado ${user.name} registrado'),
+                          content: Text(isEditing ? '✓ Operario ${user.name} actualizado' : '✓ Operario ${user.name} registrado con éxito'),
                           backgroundColor: AppColors.success,
                         ),
                       );
                     }
                   },
-                  child: Text(isEditing ? 'Guardar Cambios' : 'Registrar Empleado'),
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Registrar Operario'),
                 ),
               ],
             );
@@ -232,18 +312,36 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
   // --- Modal para Armar o Modificar Cuadrilla ---
   void _showCrewDialog({CrewModel? crewToEdit}) {
     final isEditing = crewToEdit != null;
+    final crewFormKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: crewToEdit?.name ?? '');
     final specialtyCtrl = TextEditingController(text: crewToEdit?.specialty ?? 'Mantenimiento General');
     final notesCtrl = TextEditingController(text: crewToEdit?.notes ?? '');
 
-    String selectedShift = crewToEdit?.shift ?? 'Turno Mañana (06:00 - 14:00)';
-    String selectedLeader = crewToEdit?.leaderName ?? 'Carlos Méndez';
-    String selectedLeaderBadge = crewToEdit?.leaderBadge ?? 'SUP-1020';
+    const validShifts = [
+      'Turno Mañana (06:00 - 14:00)',
+      'Turno Tarde (14:00 - 22:00)',
+      'Turno Noche (22:00 - 06:00)',
+      'Turno Rotativo',
+    ];
+    String selectedShift = crewToEdit?.shift ?? validShifts.first;
+    if (!validShifts.contains(selectedShift)) {
+      selectedShift = validShifts.first;
+    }
 
     final users = ref.read(usersProvider);
     final supervisors = users.where((u) => u.role == UserRole.supervisor || u.role == UserRole.admin).toList();
-    final technicians = users.where((u) => u.role == UserRole.technician).toList();
+    final potentialLeaders = supervisors.isNotEmpty ? supervisors : users;
 
+    String selectedLeader = crewToEdit?.leaderName ?? (potentialLeaders.isNotEmpty ? potentialLeaders.first.name : 'Carlos Méndez');
+    String selectedLeaderBadge = crewToEdit?.leaderBadge ?? (potentialLeaders.isNotEmpty ? potentialLeaders.first.badge : 'SUP-1020');
+
+    if (!potentialLeaders.any((u) => u.name == selectedLeader) && potentialLeaders.isNotEmpty) {
+      selectedLeader = potentialLeaders.first.name;
+      selectedLeaderBadge = potentialLeaders.first.badge;
+    }
+
+    final technicians = users.where((u) => u.role == UserRole.technician).toList();
+    final selectableUsers = technicians.isNotEmpty ? technicians : users;
     List<String> selectedMembers = List<String>.from(crewToEdit?.memberNames ?? []);
 
     showDialog(
@@ -258,109 +356,148 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                 children: [
                   Icon(isEditing ? Icons.edit : Icons.group_add, color: AppColors.warning),
                   const SizedBox(width: 10),
-                  Text(isEditing ? 'Modificar Cuadrilla' : 'Armar Nueva Cuadrilla'),
+                  Text(isEditing ? 'Modificar Cuadrilla de Trabajo' : 'Armar Nueva Cuadrilla de Trabajo'),
                 ],
               ),
               content: SizedBox(
                 width: 580,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: const InputDecoration(labelText: 'Nombre de la Cuadrilla', hintText: 'Ej: Cuadrilla Alfa - Mecánica'),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedShift,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Turno Asignado'),
-                              items: const [
-                                DropdownMenuItem(value: 'Turno Mañana (06:00 - 14:00)', child: Text('Turno Mañana (06-14hs)', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Tarde (14:00 - 22:00)', child: Text('Turno Tarde (14-22hs)', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Noche (22:00 - 06:00)', child: Text('Turno Noche (22-06hs)', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Turno Rotativo', child: Text('Turno Rotativo', style: TextStyle(fontSize: 12))),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) setDialogState(() => selectedShift = val);
-                              },
-                            ),
+                child: Form(
+                  key: crewFormKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: nameCtrl,
+                          autofocus: !isEditing,
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre de la Cuadrilla *',
+                            hintText: 'Ej: Cuadrilla Alfa - Mecánica & Neumática',
+                            prefixIcon: Icon(Icons.groups, size: 18),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedLeader,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Líder / Supervisor a Cargo'),
-                              items: (supervisors.isNotEmpty ? supervisors : users).map((u) {
-                                return DropdownMenuItem(value: u.name, child: Text('${u.name} (${u.badge})', style: const TextStyle(fontSize: 12)));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  final u = users.firstWhere((x) => x.name == val, orElse: () => users.first);
-                                  setDialogState(() {
-                                    selectedLeader = u.name;
-                                    selectedLeaderBadge = u.badge;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: specialtyCtrl,
-                        decoration: const InputDecoration(labelText: 'Especialidad / Alcance', hintText: 'Ej: Mecánica, Bombas, Reductores'),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: notesCtrl,
-                        decoration: const InputDecoration(labelText: 'Sectores / Naves Asignadas', hintText: 'Ej: Nave A Extrusión, Sala de Calderas'),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Selección de Operarios Integrantes
-                      const Text(
-                        'SELECCIONAR OPERARIOS INTEGRANTES:',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'El nombre de la cuadrilla es obligatorio';
+                            }
+                            return null;
+                          },
                         ),
-                        child: Column(
-                          children: technicians.map((tech) {
-                            final isSelected = selectedMembers.contains(tech.name);
-                            return CheckboxListTile(
-                              dense: true,
-                              title: Text(tech.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              subtitle: Text('${tech.badge} • ${tech.specialty}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              value: isSelected,
-                              activeColor: AppColors.primary,
-                              onChanged: (bool? checked) {
-                                setDialogState(() {
-                                  if (checked == true) {
-                                    selectedMembers.add(tech.name);
-                                  } else {
-                                    selectedMembers.remove(tech.name);
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedShift,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(
+                                  labelText: 'Turno Asignado *',
+                                  prefixIcon: Icon(Icons.access_time, size: 18),
+                                ),
+                                items: validShifts.map((s) {
+                                  return DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12)));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setDialogState(() => selectedShift = val);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedLeader,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(
+                                  labelText: 'Líder / Supervisor a Cargo *',
+                                  prefixIcon: Icon(Icons.verified_user_outlined, size: 18),
+                                ),
+                                items: potentialLeaders.map((u) {
+                                  return DropdownMenuItem(value: u.name, child: Text('${u.name} (${u.badge})', style: const TextStyle(fontSize: 12)));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    final u = potentialLeaders.firstWhere((x) => x.name == val, orElse: () => potentialLeaders.first);
+                                    setDialogState(() {
+                                      selectedLeader = u.name;
+                                      selectedLeaderBadge = u.badge;
+                                    });
                                   }
-                                });
-                              },
-                            );
-                          }).toList(),
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: specialtyCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Especialidad / Alcance',
+                            hintText: 'Ej: Bombas, Válvulas, Circuitos Hidráulicos',
+                            prefixIcon: Icon(Icons.handyman_outlined, size: 18),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: notesCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Sectores / Naves Asignadas',
+                            hintText: 'Ej: Nave A Extrusión, Sala de Calderas',
+                            prefixIcon: Icon(Icons.location_on_outlined, size: 18),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+
+                        // Selección de Operarios Integrantes
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'SELECCIONAR OPERARIOS INTEGRANTES:',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.textSecondary),
+                            ),
+                            Text(
+                              '${selectedMembers.length} seleccionados',
+                              style: const TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: selectableUsers.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Center(child: Text('No hay operarios registrados aún.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                                )
+                              : Column(
+                                  children: selectableUsers.map((tech) {
+                                    final isSelected = selectedMembers.contains(tech.name);
+                                    return CheckboxListTile(
+                                      dense: true,
+                                      title: Text(tech.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                      subtitle: Text('${tech.badge} • ${tech.specialty}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                      value: isSelected,
+                                      activeColor: AppColors.primary,
+                                      onChanged: (bool? checked) {
+                                        setDialogState(() {
+                                          if (checked == true) {
+                                            selectedMembers.add(tech.name);
+                                          } else {
+                                            selectedMembers.remove(tech.name);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -368,13 +505,13 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
+                    if (!crewFormKey.currentState!.validate()) return;
 
                     final crew = CrewModel(
                       id: isEditing ? crewToEdit.id : const Uuid().v4(),
                       name: nameCtrl.text.trim(),
                       shift: selectedShift,
-                      specialty: specialtyCtrl.text.trim(),
+                      specialty: specialtyCtrl.text.trim().isEmpty ? 'Mantenimiento General' : specialtyCtrl.text.trim(),
                       leaderName: selectedLeader,
                       leaderBadge: selectedLeaderBadge,
                       memberNames: selectedMembers,
@@ -391,13 +528,13 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(isEditing ? 'Cuadrilla ${crew.name} actualizada' : 'Cuadrilla ${crew.name} armada con éxito'),
+                          content: Text(isEditing ? '✓ Cuadrilla ${crew.name} actualizada' : '✓ Cuadrilla ${crew.name} armada con éxito'),
                           backgroundColor: AppColors.success,
                         ),
                       );
                     }
                   },
-                  child: Text(isEditing ? 'Guardar Cambios' : 'Confirmar Cuadrilla'),
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Confirmar y Crear Cuadrilla'),
                 ),
               ],
             );
@@ -464,8 +601,11 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,30 +616,35 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Alta, baja, edición de nómina y conformación de equipos de trabajo',
+                        'Alta, baja, edición de nómina de operarios y conformación de equipos de trabajo',
                         style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
-                  Row(
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
                       ElevatedButton.icon(
                         onPressed: () => _showUserDialog(),
                         icon: const Icon(Icons.person_add, size: 16),
-                        label: const Text('AGREGAR PERSONA'),
+                        label: const Text('AGREGAR OPERARIO / PERSONAL'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
-                      const SizedBox(width: 10),
                       ElevatedButton.icon(
                         onPressed: () => _showCrewDialog(),
                         icon: const Icon(Icons.group_add, size: 16),
-                        label: const Text('ARMAR CUADRILLA'),
+                        label: const Text('ARMAR NUEVA CUADRILLA'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.warning,
                           foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],

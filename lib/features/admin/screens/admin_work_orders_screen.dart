@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/models/asset_model.dart';
 import '../../../core/models/checklist_item_model.dart';
 import '../../../core/models/task_template_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
+import '../../../core/services/mock_data_service.dart';
 import '../../../core/services/pdf_report_service.dart';
 
 class AdminWorkOrdersScreen extends ConsumerStatefulWidget {
@@ -167,25 +167,32 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
   // --- Modal para Despachar o Modificar Orden de Trabajo ---
   void _showCreateOrderDialog(BuildContext context, {WorkOrderModel? orderToEdit}) {
     final isEditing = orderToEdit != null;
-    final assets = ref.read(assetsProvider);
-    final plantUsers = ref.read(usersProvider);
+    final formKey = GlobalKey<FormState>();
+    final rawAssets = ref.read(assetsProvider);
+    final assets = rawAssets.isNotEmpty ? rawAssets : MockDataService.getAssets();
+    final rawUsers = ref.read(usersProvider);
+    final plantUsers = rawUsers.isNotEmpty ? rawUsers : MockDataService.getMockUsers();
     final plantCrews = ref.read(crewsProvider);
     final templates = TaskTemplateModel.getDefaultTemplates();
-
-    if (assets.isEmpty) return;
 
     final titleCtrl = TextEditingController(text: orderToEdit?.title ?? '');
     final descCtrl = TextEditingController(text: orderToEdit?.description ?? '');
 
-    AssetModel selectedAsset = orderToEdit != null
-        ? assets.firstWhere((a) => a.id == orderToEdit.asset.id, orElse: () => assets.first)
-        : assets.first;
+    String selectedAssetId = (orderToEdit != null && assets.any((a) => a.id == orderToEdit.asset.id))
+        ? orderToEdit.asset.id
+        : assets.first.id;
 
     bool assignToCrew = orderToEdit?.assignedCrew != null && plantCrews.isNotEmpty;
-    String? selectedCrewName = orderToEdit?.assignedCrew ?? (plantCrews.isNotEmpty ? plantCrews.first.name : null);
+    String? selectedCrewName = (orderToEdit?.assignedCrew != null && plantCrews.any((c) => c.name == orderToEdit!.assignedCrew))
+        ? orderToEdit!.assignedCrew
+        : (plantCrews.isNotEmpty ? plantCrews.first.name : null);
 
-    String selectedTechnician = orderToEdit?.technicianName ?? (plantUsers.isNotEmpty ? plantUsers.first.name : 'Maximiliano Rossi');
-    String selectedBadge = orderToEdit?.technicianBadge ?? (plantUsers.isNotEmpty ? plantUsers.first.badge : 'TEC-4482');
+    final defaultUser = (orderToEdit != null && plantUsers.any((u) => u.name == orderToEdit.technicianName))
+        ? plantUsers.firstWhere((u) => u.name == orderToEdit.technicianName)
+        : plantUsers.first;
+
+    String selectedTechnician = defaultUser.name;
+    String selectedBadge = defaultUser.badge;
 
     WorkOrderPriority selectedPriority = orderToEdit?.priority ?? WorkOrderPriority.normal;
     WorkOrderType selectedType = orderToEdit?.type ?? WorkOrderType.correctivo;
@@ -240,335 +247,349 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
               content: SizedBox(
                 width: 680,
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Selector de Carga desde Plantilla
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.auto_fix_high, color: AppColors.primary, size: 22),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Cargar Protocolo desde Plantilla Predefinida', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                                  Text('Autocompleta título, prioridad y todos los pasos técnicos', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                            DropdownButton<TaskTemplateModel>(
-                              hint: const Text('Elegir Plantilla', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-                              underline: const SizedBox(),
-                              dropdownColor: AppColors.surfaceElevated,
-                              items: templates.map((t) {
-                                return DropdownMenuItem(value: t, child: Text(t.name, style: const TextStyle(fontSize: 12)));
-                              }).toList(),
-                              onChanged: (tpl) {
-                                if (tpl != null) {
-                                  setDialogState(() {
-                                    titleCtrl.text = tpl.name;
-                                    descCtrl.text = tpl.description;
-                                    selectedType = tpl.type;
-                                    selectedPriority = tpl.defaultPriority;
-                                    customSteps = List<ChecklistItemModel>.from(tpl.steps);
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TextField(
-                        controller: titleCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Título de la Tarea / Intervención',
-                          hintText: 'Ej: Ajuste de rodamientos y prueba de vibración',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descCtrl,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'Descripción técnica del trabajo',
-                          hintText: 'Detalle el procedimiento requerido...',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Activo / Máquina
-                      DropdownButtonFormField<AssetModel>(
-                        initialValue: selectedAsset,
-                        dropdownColor: AppColors.surfaceElevated,
-                        decoration: const InputDecoration(labelText: 'Activo / Máquina de Planta'),
-                        items: assets.map((a) {
-                          return DropdownMenuItem(
-                            value: a,
-                            child: Text('${a.code} - ${a.name} (${a.criticality})', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedAsset = val);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Selector: Asignar a Técnico Individual o a Cuadrilla
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('DESTINATARIO DE LA ORDEN:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => setDialogState(() => assignToCrew = false),
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: !assignToCrew ? AppColors.primary.withValues(alpha: 0.2) : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: !assignToCrew ? AppColors.primary : AppColors.border),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.person, size: 16, color: !assignToCrew ? AppColors.primary : AppColors.textMuted),
-                                          const SizedBox(width: 6),
-                                          Text('Técnico Individual', style: TextStyle(fontSize: 12, fontWeight: !assignToCrew ? FontWeight.bold : FontWeight.normal, color: Colors.white)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Selector de Carga desde Plantilla
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.auto_fix_high, color: AppColors.primary, size: 22),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Cargar Protocolo desde Plantilla Predefinida', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                                    Text('Autocompleta título, prioridad y todos los pasos técnicos', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => setDialogState(() => assignToCrew = true),
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: assignToCrew ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: assignToCrew ? AppColors.warning : AppColors.border),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.groups, size: 16, color: assignToCrew ? AppColors.warning : AppColors.textMuted),
-                                          const SizedBox(width: 6),
-                                          Text('Cuadrilla Completa', style: TextStyle(fontSize: 12, fontWeight: assignToCrew ? FontWeight.bold : FontWeight.normal, color: Colors.white)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            if (assignToCrew && plantCrews.isNotEmpty) ...[
-                              DropdownButtonFormField<String>(
-                                initialValue: selectedCrewName ?? plantCrews.first.name,
-                                dropdownColor: AppColors.surfaceElevated,
-                                decoration: const InputDecoration(labelText: 'Seleccionar Cuadrilla de Mantenimiento'),
-                                items: plantCrews.map((c) {
-                                  return DropdownMenuItem(
-                                    value: c.name,
-                                    child: Text('${c.name} (${c.shift} • Líder: ${c.leaderName})', style: const TextStyle(fontSize: 12)),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    final crew = plantCrews.firstWhere((c) => c.name == val);
-                                    setDialogState(() {
-                                      selectedCrewName = crew.name;
-                                      selectedTechnician = crew.leaderName;
-                                      selectedBadge = crew.leaderBadge;
-                                    });
-                                  }
-                                },
                               ),
-                            ] else ...[
-                              DropdownButtonFormField<String>(
-                                initialValue: selectedTechnician,
+                              DropdownButton<TaskTemplateModel>(
+                                hint: const Text('Elegir Plantilla', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                                underline: const SizedBox(),
                                 dropdownColor: AppColors.surfaceElevated,
-                                decoration: const InputDecoration(labelText: 'Seleccionar Técnico Asignado'),
-                                items: plantUsers.map((u) {
-                                  return DropdownMenuItem(
-                                    value: u.name,
-                                    child: Text('${u.name} (${u.badge} • ${u.specialty})', style: const TextStyle(fontSize: 12)),
-                                  );
+                                items: templates.map((t) {
+                                  return DropdownMenuItem(value: t, child: Text(t.name, style: const TextStyle(fontSize: 12)));
                                 }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    final u = plantUsers.firstWhere((usr) => usr.name == val, orElse: () => plantUsers.first);
+                                onChanged: (tpl) {
+                                  if (tpl != null) {
                                     setDialogState(() {
-                                      selectedTechnician = u.name;
-                                      selectedBadge = u.badge;
-                                      selectedCrewName = null;
+                                      titleCtrl.text = tpl.name;
+                                      descCtrl.text = tpl.description;
+                                      selectedType = tpl.type;
+                                      selectedPriority = tpl.defaultPriority;
+                                      customSteps = List<ChecklistItemModel>.from(tpl.steps);
                                     });
                                   }
                                 },
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        TextFormField(
+                          controller: titleCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Título de la Tarea / Intervención *',
+                            hintText: 'Ej: Ajuste de rodamientos y prueba de vibración',
+                            prefixIcon: Icon(Icons.assignment, size: 20),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'El título de la orden es obligatorio';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: descCtrl,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            labelText: 'Descripción técnica del trabajo',
+                            hintText: 'Detalle el procedimiento requerido...',
+                            prefixIcon: Icon(Icons.description_outlined, size: 20),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Activo / Máquina
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedAssetId,
+                          dropdownColor: AppColors.surfaceElevated,
+                          decoration: const InputDecoration(
+                            labelText: 'Activo / Máquina de Planta *',
+                            prefixIcon: Icon(Icons.precision_manufacturing, size: 20),
+                          ),
+                          items: assets.map((a) {
+                            return DropdownMenuItem<String>(
+                              value: a.id,
+                              child: Text('${a.code} - ${a.name} (${a.criticality})', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setDialogState(() => selectedAssetId = val);
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Selector: Asignar a Técnico Individual o a Cuadrilla
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('DESTINATARIO DE LA ORDEN:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => setDialogState(() => assignToCrew = false),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: !assignToCrew ? AppColors.primary.withValues(alpha: 0.2) : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: !assignToCrew ? AppColors.primary : AppColors.border),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.person, size: 16, color: !assignToCrew ? AppColors.primary : AppColors.textMuted),
+                                            const SizedBox(width: 6),
+                                            Text('Técnico Individual', style: TextStyle(fontSize: 12, fontWeight: !assignToCrew ? FontWeight.bold : FontWeight.normal, color: Colors.white)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => setDialogState(() => assignToCrew = true),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: assignToCrew ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: assignToCrew ? AppColors.warning : AppColors.border),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.groups, size: 16, color: assignToCrew ? AppColors.warning : AppColors.textMuted),
+                                            const SizedBox(width: 6),
+                                            Text('Cuadrilla Completa', style: TextStyle(fontSize: 12, fontWeight: assignToCrew ? FontWeight.bold : FontWeight.normal, color: Colors.white)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              if (assignToCrew && plantCrews.isNotEmpty) ...[
+                                DropdownButtonFormField<String>(
+                                  initialValue: (selectedCrewName != null && plantCrews.any((c) => c.name == selectedCrewName)) ? selectedCrewName : plantCrews.first.name,
+                                  dropdownColor: AppColors.surfaceElevated,
+                                  decoration: const InputDecoration(labelText: 'Seleccionar Cuadrilla de Mantenimiento'),
+                                  items: plantCrews.map((c) {
+                                    return DropdownMenuItem(
+                                      value: c.name,
+                                      child: Text('${c.name} (${c.shift} • Líder: ${c.leaderName})', style: const TextStyle(fontSize: 12)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      final crew = plantCrews.firstWhere((c) => c.name == val);
+                                      setDialogState(() {
+                                        selectedCrewName = crew.name;
+                                        selectedTechnician = crew.leaderName;
+                                        selectedBadge = crew.leaderBadge;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ] else ...[
+                                DropdownButtonFormField<String>(
+                                  initialValue: plantUsers.any((u) => u.name == selectedTechnician) ? selectedTechnician : plantUsers.first.name,
+                                  dropdownColor: AppColors.surfaceElevated,
+                                  decoration: const InputDecoration(labelText: 'Seleccionar Técnico Asignado'),
+                                  items: plantUsers.map((u) {
+                                    return DropdownMenuItem(
+                                      value: u.name,
+                                      child: Text('${u.name} (${u.badge} • ${u.specialty})', style: const TextStyle(fontSize: 12)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      final u = plantUsers.firstWhere((usr) => usr.name == val, orElse: () => plantUsers.first);
+                                      setDialogState(() {
+                                        selectedTechnician = u.name;
+                                        selectedBadge = u.badge;
+                                        selectedCrewName = null;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<WorkOrderPriority>(
+                                initialValue: selectedPriority,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(labelText: 'Nivel de Prioridad'),
+                                items: WorkOrderPriority.values.map((p) {
+                                  return DropdownMenuItem(value: p, child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 12)));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setDialogState(() => selectedPriority = val);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<WorkOrderType>(
+                                initialValue: selectedType,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(labelText: 'Tipo de Mantenimiento'),
+                                items: WorkOrderType.values.map((t) {
+                                  return DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(fontSize: 12)));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setDialogState(() => selectedType = val);
+                                },
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<WorkOrderPriority>(
-                              initialValue: selectedPriority,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Nivel de Prioridad'),
-                              items: WorkOrderPriority.values.map((p) {
-                                return DropdownMenuItem(value: p, child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 12)));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setDialogState(() => selectedPriority = val);
+                        // Diseñador Visual Paso a Paso de Tareas (Step-by-step Builder)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${customSteps.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary)),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final newStep = await _showAddStepDialog(context);
+                                if (newStep != null) {
+                                  setDialogState(() => customSteps.add(newStep));
+                                }
                               },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<WorkOrderType>(
-                              initialValue: selectedType,
-                              dropdownColor: AppColors.surfaceElevated,
-                              decoration: const InputDecoration(labelText: 'Tipo de Mantenimiento'),
-                              items: WorkOrderType.values.map((t) {
-                                return DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(fontSize: 12)));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setDialogState(() => selectedType = val);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Diseñador Visual Paso a Paso de Tareas (Step-by-step Builder)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('PASOS TÉCNICOS DEL PROTOCOLO (${customSteps.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary)),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              final newStep = await _showAddStepDialog(context);
-                              if (newStep != null) {
-                                setDialogState(() => customSteps.add(newStep));
-                              }
-                            },
-                            icon: const Icon(Icons.add, size: 14),
-                            label: const Text('Agregar Paso'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.surfaceElevated,
-                              foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: customSteps.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: Text('No hay pasos agregados. Presiona "Agregar Paso" o carga una plantilla.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
-                              )
-                            : Column(
-                                children: customSteps.asMap().entries.map((entry) {
-                                  final idx = entry.key + 1;
-                                  final step = entry.value;
-
-                                  String subtitle = 'Inspección Sí/No';
-                                  if (step.type == ChecklistItemType.numericMeasurement) {
-                                    subtitle = 'Medición (${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""})';
-                                  } else if (step.type == ChecklistItemType.photoRequired) {
-                                    subtitle = 'Foto obligatoria requerida';
-                                  }
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surface,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 12,
-                                          backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                                          child: Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                              Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                                            ],
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
-                                          tooltip: 'Modificar este paso',
-                                          onPressed: () async {
-                                            final edited = await _showAddStepDialog(context, initialStep: step);
-                                            if (edited != null) {
-                                              setDialogState(() {
-                                                customSteps[entry.key] = edited;
-                                              });
-                                            }
-                                          },
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                                          tooltip: 'Eliminar este paso',
-                                          onPressed: () {
-                                            setDialogState(() => customSteps.removeAt(entry.key));
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
+                              icon: const Icon(Icons.add, size: 14),
+                              label: const Text('Agregar Paso'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.surfaceElevated,
+                                foregroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               ),
-                      ),
-                    ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: customSteps.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(child: Text('No hay pasos agregados. Presiona "Agregar Paso" o carga una plantilla.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                                )
+                              : Column(
+                                  children: customSteps.asMap().entries.map((entry) {
+                                    final idx = entry.key + 1;
+                                    final step = entry.value;
+
+                                    String subtitle = 'Inspección Sí/No';
+                                    if (step.type == ChecklistItemType.numericMeasurement) {
+                                      subtitle = 'Medición (${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""})';
+                                    } else if (step.type == ChecklistItemType.photoRequired) {
+                                      subtitle = 'Foto obligatoria requerida';
+                                    }
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 12,
+                                            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                            child: Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                                Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                            tooltip: 'Modificar este paso',
+                                            onPressed: () async {
+                                              final edited = await _showAddStepDialog(context, initialStep: step);
+                                              if (edited != null) {
+                                                setDialogState(() {
+                                                  customSteps[entry.key] = edited;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                            tooltip: 'Eliminar este paso',
+                                            onPressed: () {
+                                              setDialogState(() => customSteps.removeAt(entry.key));
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -576,8 +597,9 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                 ElevatedButton.icon(
                   onPressed: () async {
-                    if (titleCtrl.text.trim().isEmpty) return;
+                    if (!formKey.currentState!.validate()) return;
 
+                    final selectedAsset = assets.firstWhere((a) => a.id == selectedAssetId, orElse: () => assets.first);
                     final String orderNum = isEditing ? orderToEdit.orderNumber : 'OT-2026-${(1000 + ref.read(workOrdersProvider).length + 1)}';
 
                     final newOrder = WorkOrderModel(
@@ -986,8 +1008,11 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

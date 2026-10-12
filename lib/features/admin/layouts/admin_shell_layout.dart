@@ -26,7 +26,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     'Órdenes de Trabajo',
     'Parque de Activos',
     'Almacén de Repuestos',
-    'Cuadrillas de Planta',
+    'Personal & Cuadrillas',
   ];
 
   @override
@@ -147,7 +147,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                 _buildNavItem(1, Icons.assignment_outlined, Icons.assignment, 'Órdenes de Trabajo'),
                 _buildNavItem(2, Icons.precision_manufacturing_outlined, Icons.precision_manufacturing, 'Parque de Activos'),
                 _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Inventario & Stock'),
-                _buildNavItem(4, Icons.badge_outlined, Icons.badge, 'Cuadrillas de Planta'),
+                _buildNavItem(4, Icons.people_alt_outlined, Icons.people_alt, 'Personal & Cuadrillas'),
 
                 const Spacer(),
                 const Divider(height: 1),
