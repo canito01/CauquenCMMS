@@ -1,6 +1,7 @@
 import '../models/asset_model.dart';
 import '../models/checklist_item_model.dart';
 import '../models/spare_part_model.dart';
+import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 
 class MockDataService {
@@ -274,6 +275,41 @@ class MockDataService {
         ],
         syncStatus: SyncStatus.synced,
         updatedAt: DateTime.now().subtract(const Duration(hours: 3)),
+      ),
+    ];
+  }
+
+  static List<UserModel> getMockUsers() {
+    return const [
+      UserModel(
+        id: 'usr-1',
+        email: 'maxi.rossi@planta.com',
+        name: 'Maximiliano Rossi',
+        badge: 'TEC-4482',
+        role: UserRole.technician,
+        shift: 'Turno Mañana (06:00 - 14:00)',
+        specialty: 'Mecánica & Neumática Industrial',
+        phone: '+54 9 11 4821-9921',
+      ),
+      UserModel(
+        id: 'usr-2',
+        email: 'carlos.mendez@planta.com',
+        name: 'Carlos Méndez',
+        badge: 'SUP-1020',
+        role: UserRole.supervisor,
+        shift: 'Turno Rotativo',
+        specialty: 'Jefe de Turno & Calidad',
+        phone: '+54 9 11 5590-1284',
+      ),
+      UserModel(
+        id: 'usr-3',
+        email: 'lucas.varela@planta.com',
+        name: 'Lucas Varela',
+        badge: 'TEC-5510',
+        role: UserRole.technician,
+        shift: 'Turno Tarde (14:00 - 22:00)',
+        specialty: 'Electricidad, Automatización & PLC',
+        phone: '+54 9 11 3312-8840',
       ),
     ];
   }

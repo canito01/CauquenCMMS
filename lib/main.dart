@@ -25,16 +25,18 @@ Future<void> main() async {
   );
 }
 
-class SistemaMaxiApp extends StatelessWidget {
+class SistemaMaxiApp extends ConsumerWidget {
   const SistemaMaxiApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+
     return MaterialApp.router(
-      title: 'Sistema Maxi - Gestión de Mantenimiento Industrial',
+      title: 'Cauquén CMMS - Gestión de Mantenimiento Industrial',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      routerConfig: appRouter,
+      routerConfig: router,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
 
@@ -16,17 +17,52 @@ class SyncScreen extends ConsumerStatefulWidget {
 class _SyncScreenState extends ConsumerState<SyncScreen> {
   bool _isSyncing = false;
 
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Cerrar Sesión de Operador'),
+        content: const Text(
+          '¿Desea cerrar la sesión actual de la cuadrilla? Deberá ingresar legajo y contraseña nuevamente.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(authProvider.notifier).logout();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Cerrar Sesión'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final syncQueue = ref.watch(syncQueueProvider);
     final isOnline = ref.watch(isOnlineStateProvider);
     final connectivityService = ref.read(connectivityServiceProvider);
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
+    final isSupervisor = user?.role == UserRole.supervisor;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Perfil y Sincronización'),
-        actions: const [
-          Padding(
+        actions: [
+          IconButton(
+            tooltip: 'Cerrar Sesión',
+            icon: const Icon(Icons.logout, color: AppColors.danger),
+            onPressed: () => _showLogoutDialog(context),
+          ),
+          const Padding(
             padding: EdgeInsets.only(right: 16),
             child: ConnectivityBadge(),
           ),
@@ -43,30 +79,41 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                    child: const Icon(Icons.engineering, size: 36, color: AppColors.primary),
+                    backgroundColor: isSupervisor
+                        ? AppColors.warning.withValues(alpha: 0.2)
+                        : AppColors.primary.withValues(alpha: 0.2),
+                    child: Icon(
+                      isSupervisor ? Icons.verified_user : Icons.engineering,
+                      size: 34,
+                      color: isSupervisor ? AppColors.warning : AppColors.primary,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
-                          'Maximiliano Rossi',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                          user?.name ?? 'Operario de Planta',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Legajo: TEC-4482 • Turno Mañana',
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          'Legajo: ${user?.badge ?? "TEC-0000"} • ${user?.shift ?? "Turno General"}',
+                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Especialidad: Mecánica & Neumática',
-                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          '${user?.roleDisplayName ?? "Técnico"} • ${user?.specialty ?? "Mantenimiento"}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar Sesión',
+                    icon: const Icon(Icons.logout, color: AppColors.danger, size: 20),
+                    onPressed: () => _showLogoutDialog(context),
                   ),
                 ],
               ),

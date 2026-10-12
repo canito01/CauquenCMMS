@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/spare_part_model.dart';
 import '../models/sync_item_model.dart';
+import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 import '../config/supabase_config.dart';
+import 'mock_data_service.dart';
 import 'connectivity_service.dart';
 import 'local_storage_service.dart';
 import 'supabase_sync_service.dart';
@@ -402,3 +404,144 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
 
 final workOrdersProvider =
     NotifierProvider<WorkOrdersNotifier, List<WorkOrderModel>>(WorkOrdersNotifier.new);
+
+// ============================================================================
+// Estado y Proveedor de Autenticación de Operadores (Offline-First)
+// ============================================================================
+class AuthState {
+  final UserModel? user;
+  final bool isLoading;
+  final String? errorMessage;
+
+  const AuthState({
+    this.user,
+    this.isLoading = false,
+    this.errorMessage,
+  });
+
+  bool get isAuthenticated => user != null;
+
+  AuthState copyWith({
+    UserModel? user,
+    bool? isLoading,
+    String? errorMessage,
+    bool clearUser = false,
+    bool clearError = false,
+  }) {
+    return AuthState(
+      user: clearUser ? null : (user ?? this.user),
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
+
+class AuthNotifier extends Notifier<AuthState> {
+  @override
+  AuthState build() {
+    final storage = ref.watch(localStorageProvider);
+    final cachedUser = storage.getCurrentUser();
+    return AuthState(user: cachedUser);
+  }
+
+  // Inicio de sesión con credenciales (Legajo / Correo y Contraseña)
+  Future<bool> login({
+    required String identifier,
+    required String password,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    final cleanId = identifier.trim().toLowerCase();
+    final cleanPass = password.trim();
+
+    if (cleanId.isEmpty || cleanPass.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Debe ingresar su legajo o correo y contraseña.',
+      );
+      return false;
+    }
+
+    if (cleanPass.length < 4) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'La contraseña debe tener al menos 4 caracteres.',
+      );
+      return false;
+    }
+
+    // Si Supabase está configurado y hay conexión, podemos intentar login cloud
+    final isOnline = ref.read(isOnlineStateProvider);
+    if (isOnline && SupabaseConfig.isConfigured && cleanId.contains('@')) {
+      try {
+        final res = await SupabaseSyncService.client?.auth.signInWithPassword(
+          email: cleanId,
+          password: cleanPass,
+        );
+        if (res?.user != null) {
+          final plantUser = UserModel(
+            id: res!.user!.id,
+            email: res.user!.email ?? cleanId,
+            name: res.user!.userMetadata?['name'] as String? ?? cleanId.split('@')[0].toUpperCase(),
+            badge: res.user!.userMetadata?['badge'] as String? ?? 'TEC-CLOU',
+            role: UserRole.technician,
+            shift: 'Turno Mañana',
+            specialty: 'Mantenimiento de Planta',
+          );
+          final storage = ref.read(localStorageProvider);
+          await storage.saveCurrentUser(plantUser);
+          state = AuthState(user: plantUser, isLoading: false);
+          return true;
+        }
+      } catch (_) {
+        // Si falla cloud (por ejemplo usuario offline o no registrado en auth), caemos en el padrón local
+      }
+    }
+
+    // Padrón de técnicos y supervisores de planta
+    final plantUsers = MockDataService.getMockUsers();
+    final matchedUser = plantUsers.firstWhere(
+      (u) =>
+          u.email.toLowerCase() == cleanId ||
+          u.badge.toLowerCase() == cleanId ||
+          u.name.toLowerCase().contains(cleanId),
+      orElse: () => UserModel(
+        id: 'usr-custom-${DateTime.now().millisecondsSinceEpoch}',
+        email: cleanId.contains('@') ? cleanId : '$cleanId@planta.com',
+        name: cleanId.toUpperCase(),
+        badge: cleanId.toUpperCase(),
+        role: cleanId.contains('sup') ? UserRole.supervisor : UserRole.technician,
+        shift: 'Turno General',
+        specialty: 'Mantenimiento General',
+      ),
+    );
+
+    final storage = ref.read(localStorageProvider);
+    await storage.saveCurrentUser(matchedUser);
+
+    state = AuthState(user: matchedUser, isLoading: false);
+    return true;
+  }
+
+  // Acceso rápido de desarrollo / pruebas para operarios
+  Future<void> quickLoginAs(UserModel user) async {
+    final storage = ref.read(localStorageProvider);
+    await storage.saveCurrentUser(user);
+    state = AuthState(user: user, isLoading: false);
+  }
+
+  // Cierre de sesión seguro
+  Future<void> logout() async {
+    final storage = ref.read(localStorageProvider);
+    await storage.clearCurrentUser();
+    if (SupabaseConfig.isConfigured) {
+      try {
+        await SupabaseSyncService.client?.auth.signOut();
+      } catch (_) {}
+    }
+    state = const AuthState();
+  }
+}
+
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
+

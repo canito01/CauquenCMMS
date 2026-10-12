@@ -27,19 +27,22 @@ class DashboardScreen extends ConsumerWidget {
         ? inProgressOrders.first
         : (pausedOrders.isNotEmpty ? pausedOrders.first : null);
 
+    final authState = ref.watch(authProvider);
+    final currentUser = authState.user;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Sistema GMAO Industrial',
+              '🦅 Cauquén CMMS',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
             Text(
-              'Maximiliano Rossi • TEC-4482',
-              style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
+              '${currentUser?.name ?? "Operario de Planta"} • ${currentUser?.badge ?? "TEC-0000"}',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
               overflow: TextOverflow.ellipsis,
             ),
           ],

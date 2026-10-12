@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset_model.dart';
 import '../models/spare_part_model.dart';
 import '../models/sync_item_model.dart';
+import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 import 'mock_data_service.dart';
 
@@ -11,6 +12,7 @@ class LocalStorageService {
   static const String _keyAssets = 'maxi_assets_v1';
   static const String _keySpareParts = 'maxi_spare_parts_v1';
   static const String _keySyncQueue = 'maxi_sync_queue_v1';
+  static const String _keyCurrentUser = 'cauquen_current_user_v1';
 
   final SharedPreferences _prefs;
 
@@ -140,6 +142,30 @@ class LocalStorageService {
 
   Future<void> clearSyncQueue() async {
     await _prefs.remove(_keySyncQueue);
+  }
+
+  // --- Sesión de Usuario (Offline-First) ---
+  UserModel? getCurrentUser() {
+    final raw = _prefs.getString(_keyCurrentUser);
+    if (raw == null) return null;
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return UserModel.fromMap(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCurrentUser(UserModel? user) async {
+    if (user == null) {
+      await _prefs.remove(_keyCurrentUser);
+    } else {
+      await _prefs.setString(_keyCurrentUser, jsonEncode(user.toMap()));
+    }
+  }
+
+  Future<void> clearCurrentUser() async {
+    await _prefs.remove(_keyCurrentUser);
   }
 }
 

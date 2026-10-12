@@ -63,3 +63,4 @@ Proveer a los jefes de mantenimiento, ingenieros de planta y supervisores de una
 Aprovechando que **Flutter genera ambos formatos desde el mismo código**:
 1. **Corto Plazo (Validación y Testing):** Utilizar **PWA** para que los técnicos prueben de inmediato en sus celulares mediante la red local o link cloud sin lidiar con permisos de instalación.
 2. **Mediano Plazo (Producción Oficial):** Generar el archivo `.apk` release firmado para instalar en los celulares de cuadrilla con acceso nativo optimizado.
+
