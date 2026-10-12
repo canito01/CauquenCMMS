@@ -549,59 +549,69 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                         const SizedBox(height: 20),
 
-                        // Barra Superior de Etapas y Pasos
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'ESTRUCTURA DE ETAPAS Y PASOS TÉCNICOS (${steps.length} pasos en ${stages.length} etapas)',
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        // Barra Superior de Etapas y Pasos (MaintainX Header Banner)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 24),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'ESTRUCTURA DE ETAPAS Y PASOS TÉCNICOS (${steps.length} pasos en ${stages.length} etapas)',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                    ),
+                                    const Text(
+                                      'Organiza el procedimiento en fases lógicas con pasos obligatorios u opcionales',
+                                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    ),
+                                  ],
                                 ),
-                                const Text(
-                                  'Organiza el procedimiento en fases lógicas con pasos obligatorios u opcionales',
-                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final newStage = await _showAddStageDialog(context, existingStagesCount: stages.length);
+                                  if (newStage != null) {
+                                    setDialogState(() => stages.add(newStage));
+                                  }
+                                },
+                                icon: const Icon(Icons.add_to_photos, size: 15),
+                                label: const Text('+ AÑADIR ETAPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 ),
-                              ],
-                            ),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final newStage = await _showAddStageDialog(context, existingStagesCount: stages.length);
-                                    if (newStage != null) {
-                                      setDialogState(() => stages.add(newStage));
-                                    }
-                                  },
-                                  icon: const Icon(Icons.add_to_photos, size: 15, color: AppColors.primary),
-                                  label: const Text('+ AÑADIR ETAPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: AppColors.primary),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  final newStep = await _showAddStepDialog(context, stages: stages);
+                                  if (newStep != null) {
+                                    setDialogState(() => steps.add(newStep));
+                                  }
+                                },
+                                icon: const Icon(Icons.add_circle_outline, size: 15, color: AppColors.primary),
+                                label: const Text('+ AGREGAR PASO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.primary),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 ),
-                                ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final newStep = await _showAddStepDialog(context, stages: stages);
-                                    if (newStep != null) {
-                                      setDialogState(() => steps.add(newStep));
-                                    }
-                                  },
-                                  icon: const Icon(Icons.add_circle, size: 15),
-                                  label: const Text('+ AGREGAR PASO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
 
@@ -663,6 +673,27 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                           foregroundColor: AppColors.primary,
                                           visualDensity: VisualDensity.compact,
                                         ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                        tooltip: 'Modificar nombre de etapa',
+                                        splashRadius: 16,
+                                        onPressed: () async {
+                                          final edited = await _showAddStageDialog(context, stageToEdit: stage, existingStagesCount: stages.length);
+                                          if (edited != null) {
+                                            final sIdx = stages.indexOf(stage);
+                                            if (sIdx >= 0) {
+                                              setDialogState(() {
+                                                stages[sIdx] = edited;
+                                                for (int i = 0; i < steps.length; i++) {
+                                                  if (steps[i].stageId == stage.id) {
+                                                    steps[i] = steps[i].copyWith(stageName: edited.name);
+                                                  }
+                                                }
+                                              });
+                                            }
+                                          }
+                                        },
                                       ),
                                       if (stages.length > 1)
                                         IconButton(
@@ -773,6 +804,43 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                             ),
                           );
                         }),
+
+                        // Botón Prominente para Añadir Nueva Etapa al Protocolo
+                        InkWell(
+                          onTap: () async {
+                            final newStage = await _showAddStageDialog(context, existingStagesCount: stages.length);
+                            if (newStage != null) {
+                              setDialogState(() => stages.add(newStage));
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            margin: const EdgeInsets.only(top: 8, bottom: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.primary, width: 1.5),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.add_to_photos, size: 20, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text(
+                                  '+ AÑADIR NUEVA ETAPA AL PROTOCOLO',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
