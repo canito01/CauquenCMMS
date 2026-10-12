@@ -2,9 +2,9 @@ import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../models/checklist_item_model.dart';
 import '../models/work_order_model.dart';
+import 'file_download_service.dart';
 
 class PdfReportService {
   static Future<Uint8List> generateWorkOrderReport(WorkOrderModel order) async {
@@ -416,12 +416,11 @@ class PdfReportService {
     return pdf.save();
   }
 
-  static Future<void> downloadOrPrintReport(WorkOrderModel order) async {
+  static Future<String> downloadOrPrintReport(WorkOrderModel order) async {
     final pdfBytes = await generateWorkOrderReport(order);
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdfBytes,
-      name: 'Informe_Mantenimiento_${order.orderNumber}.pdf',
-    );
+    final filename = 'Informe_Mantenimiento_${order.orderNumber}.pdf';
+    await FileDownloadService.downloadPdf(pdfBytes, filename);
+    return filename;
   }
 
   static pw.Widget _buildPdfKeyValue(String key, String value) {

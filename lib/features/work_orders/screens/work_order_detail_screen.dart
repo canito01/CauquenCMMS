@@ -27,7 +27,37 @@ class WorkOrderDetailScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary),
             tooltip: 'Descargar Informe PDF Oficial',
-            onPressed: () => PdfReportService.downloadOrPrintReport(order),
+            onPressed: () async {
+              try {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                        const SizedBox(width: 10),
+                        Text('Generando informe para ${order.orderNumber}...'),
+                      ],
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                final filename = await PdfReportService.downloadOrPrintReport(order);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✓ Archivo "$filename" descargado con éxito.'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
           ),
           const Padding(
             padding: EdgeInsets.only(right: 16),

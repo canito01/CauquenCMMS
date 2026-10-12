@@ -21,13 +21,50 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
   WorkOrderStatus? _statusFilter;
   WorkOrderPriority? _priorityFilter;
 
-  // --- Sub-diálogo para Agregar Paso al Checklist ---
-  Future<ChecklistItemModel?> _showAddStepDialog(BuildContext context) async {
-    final titleCtrl = TextEditingController();
-    ChecklistItemType stepType = ChecklistItemType.booleanCheck;
-    final unitCtrl = TextEditingController(text: 'bar');
-    final minCtrl = TextEditingController(text: '1.0');
-    final maxCtrl = TextEditingController(text: '5.0');
+  // --- Descarga y Manejo de Informe PDF con Feedback ---
+  Future<void> _handleDownloadPdf(BuildContext context, WorkOrderModel order) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              const SizedBox(width: 10),
+              Text('Generando y descargando informe oficial para ${order.orderNumber}...'),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      final filename = await PdfReportService.downloadOrPrintReport(order);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Archivo "$filename" descargado con éxito en tu equipo.'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar PDF: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  // --- Sub-diálogo para Agregar o Editar Paso al Checklist ---
+  Future<ChecklistItemModel?> _showAddStepDialog(BuildContext context, {ChecklistItemModel? initialStep}) async {
+    final titleCtrl = TextEditingController(text: initialStep?.title ?? '');
+    ChecklistItemType stepType = initialStep?.type ?? ChecklistItemType.booleanCheck;
+    final unitCtrl = TextEditingController(text: initialStep?.unit ?? 'bar');
+    final minCtrl = TextEditingController(text: initialStep?.minAcceptable != null ? initialStep!.minAcceptable.toString() : '1.0');
+    final maxCtrl = TextEditingController(text: initialStep?.maxAcceptable != null ? initialStep!.maxAcceptable.toString() : '5.0');
 
     return showDialog<ChecklistItemModel>(
       context: context,
@@ -37,7 +74,13 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
             return AlertDialog(
               backgroundColor: AppColors.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: const Text('Agregar Paso al Protocolo Técnico', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Icon(initialStep != null ? Icons.edit : Icons.add_circle_outline, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text(initialStep != null ? 'Modificar Paso del Protocolo' : 'Agregar Paso al Protocolo Técnico', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
               content: SizedBox(
                 width: 440,
                 child: Column(
@@ -45,6 +88,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                   children: [
                     TextField(
                       controller: titleCtrl,
+                      autofocus: true,
                       decoration: const InputDecoration(labelText: 'Descripción del Procedimiento / Tarea', hintText: 'Ej: Medición de temperatura en rodamientos'),
                     ),
                     const SizedBox(height: 12),
@@ -99,17 +143,18 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                   onPressed: () {
                     if (titleCtrl.text.trim().isEmpty) return;
                     final item = ChecklistItemModel(
-                      id: const Uuid().v4(),
+                      id: initialStep?.id ?? const Uuid().v4(),
                       title: titleCtrl.text.trim(),
                       type: stepType,
                       unit: stepType == ChecklistItemType.numericMeasurement ? unitCtrl.text.trim() : null,
                       minAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(minCtrl.text.trim()) : null,
                       maxAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(maxCtrl.text.trim()) : null,
-                      isCompleted: false,
+                      isCompleted: initialStep?.isCompleted ?? false,
+                      numericValue: initialStep?.numericValue,
                     );
                     Navigator.pop(ctx, item);
                   },
-                  child: const Text('Añadir Paso'),
+                  child: Text(initialStep != null ? 'Guardar Paso' : 'Añadir Paso'),
                 ),
               ],
             );
@@ -499,6 +544,18 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                                           ),
                                         ),
                                         IconButton(
+                                          icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                          tooltip: 'Modificar este paso',
+                                          onPressed: () async {
+                                            final edited = await _showAddStepDialog(context, initialStep: step);
+                                            if (edited != null) {
+                                              setDialogState(() {
+                                                customSteps[entry.key] = edited;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        IconButton(
                                           icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
                                           tooltip: 'Eliminar este paso',
                                           onPressed: () {
@@ -597,93 +654,269 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
     );
   }
 
-  // --- Modal de Detalle e Inspección con botón de PDF ---
-  void _showOrderDetailModal(BuildContext context, WorkOrderModel order) {
+  // --- Modal de Detalle e Inspección con botón de PDF y Gestión de Pasos ---
+  void _showOrderDetailModal(BuildContext context, WorkOrderModel initialOrder) {
+    WorkOrderModel currentOrder = initialOrder;
+
     showDialog(
       context: context,
       builder: (ctx) {
-        return Dialog(
-          backgroundColor: AppColors.surface,
-          insetPadding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 750, maxHeight: 850),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Dialog(
+              backgroundColor: AppColors.surface,
+              insetPadding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 820, maxHeight: 880),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${order.orderNumber} • ${order.title}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const SizedBox(height: 2),
-                          Text('Activo: ${order.asset.code} • ${order.asset.name} • ${order.asset.location}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                        ],
-                      ),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              await PdfReportService.downloadOrPrintReport(order);
-                            },
-                            icon: const Icon(Icons.picture_as_pdf, size: 16),
-                            label: const Text('INFORME PDF OFICIAL'),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        Row(
-                          children: [
-                            _buildInfoChip('Responsable', '${order.technicianName} (${order.technicianBadge})'),
-                            const SizedBox(width: 12),
-                            _buildInfoChip('Cuadrilla', order.assignedCrew ?? 'Asignación Individual'),
-                            const SizedBox(width: 12),
-                            _buildInfoChip('Prioridad', order.priority.name.toUpperCase()),
-                            const SizedBox(width: 12),
-                            _buildInfoChip('Estado', order.status.name.toUpperCase()),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        const Text('Protocolo y Pasos Ejecutados:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        ...order.checklist.map((item) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(8)),
-                            child: Row(
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(item.isCompleted ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: item.isCompleted ? AppColors.success : AppColors.textMuted),
-                                const SizedBox(width: 10),
-                                Expanded(child: Text(item.title, style: const TextStyle(fontSize: 12))),
-                                if (item.numericValue != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
-                                    child: Text('${item.numericValue} ${item.unit ?? ""}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                  ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        currentOrder.orderNumber,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        currentOrder.title,
+                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Activo: ${currentOrder.asset.code} • ${currentOrder.asset.name} • ${currentOrder.asset.location}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
                               ],
                             ),
-                          );
-                        }),
+                          ),
+                          const SizedBox(width: 12),
+                          Row(
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  _showCreateOrderDialog(context, orderToEdit: currentOrder);
+                                },
+                                icon: const Icon(Icons.edit, size: 15, color: Colors.white),
+                                label: const Text('MODIFICAR TAREA', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: () => _handleDownloadPdf(context, currentOrder),
+                                icon: const Icon(Icons.picture_as_pdf, size: 16),
+                                label: const Text('DESCARGAR PDF OFICIAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            Row(
+                              children: [
+                                _buildInfoChip('Responsable', '${currentOrder.technicianName} (${currentOrder.technicianBadge})'),
+                                const SizedBox(width: 12),
+                                _buildInfoChip('Cuadrilla', currentOrder.assignedCrew ?? 'Asignación Individual'),
+                                const SizedBox(width: 12),
+                                _buildInfoChip('Prioridad', currentOrder.priority.name.toUpperCase()),
+                                const SizedBox(width: 12),
+                                _buildInfoChip('Estado', currentOrder.status.name.toUpperCase()),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Protocolo y Pasos Técnicos con Botón Agregar Paso
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Protocolo y Pasos Técnicos (${currentOrder.checklist.length}):',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final newStep = await _showAddStepDialog(context);
+                                    if (newStep != null) {
+                                      final updatedSteps = List<ChecklistItemModel>.from(currentOrder.checklist)..add(newStep);
+                                      final updatedOrder = currentOrder.copyWith(
+                                        checklist: updatedSteps,
+                                        updatedAt: DateTime.now(),
+                                      );
+                                      await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                      setModalState(() {
+                                        currentOrder = updatedOrder;
+                                      });
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Paso "${newStep.title}" agregado a la orden.'),
+                                            backgroundColor: AppColors.success,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add, size: 14),
+                                  label: const Text('Agregar Paso'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            if (currentOrder.checklist.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text('No hay pasos configurados. Usa "Agregar Paso" para incluir procedimientos.', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                                ),
+                              )
+                            else
+                              ...currentOrder.checklist.asMap().entries.map((entry) {
+                                final idx = entry.key + 1;
+                                final item = entry.value;
+
+                                String stepTypeLabel = 'Inspección Sí/No';
+                                if (item.type == ChecklistItemType.numericMeasurement) {
+                                  stepTypeLabel = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
+                                } else if (item.type == ChecklistItemType.photoRequired) {
+                                  stepTypeLabel = 'Evidencia fotográfica obligatoria';
+                                }
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 12,
+                                        backgroundColor: item.isCompleted ? AppColors.success.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.2),
+                                        child: item.isCompleted
+                                            ? const Icon(Icons.check, size: 14, color: AppColors.success)
+                                            : Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(item.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                            Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                          ],
+                                        ),
+                                      ),
+                                      if (item.numericValue != null)
+                                        Container(
+                                          margin: const EdgeInsets.only(right: 8),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                                          child: Text('${item.numericValue} ${item.unit ?? ""}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                        ),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                        tooltip: 'Modificar este paso',
+                                        onPressed: () async {
+                                          final edited = await _showAddStepDialog(context, initialStep: item);
+                                          if (edited != null) {
+                                            final updatedSteps = List<ChecklistItemModel>.from(currentOrder.checklist);
+                                            final stepIdx = updatedSteps.indexWhere((s) => s.id == item.id);
+                                            if (stepIdx >= 0) {
+                                              updatedSteps[stepIdx] = edited;
+                                              final updatedOrder = currentOrder.copyWith(
+                                                checklist: updatedSteps,
+                                                updatedAt: DateTime.now(),
+                                              );
+                                              await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                              setModalState(() {
+                                                currentOrder = updatedOrder;
+                                              });
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Paso "${edited.title}" actualizado con éxito.'), backgroundColor: AppColors.success),
+                                                );
+                                              }
+                                            }
+                                          }
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                        tooltip: 'Eliminar este paso de la tarea',
+                                        onPressed: () async {
+                                          final updatedSteps = currentOrder.checklist.where((s) => s.id != item.id).toList();
+                                          final updatedOrder = currentOrder.copyWith(
+                                            checklist: updatedSteps,
+                                            updatedAt: DateTime.now(),
+                                          );
+                                          await ref.read(workOrdersProvider.notifier).updateWorkOrder(updatedOrder);
+                                          setModalState(() {
+                                            currentOrder = updatedOrder;
+                                          });
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Paso "${item.title}" eliminado de la orden.'), backgroundColor: AppColors.danger),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
 
                         const SizedBox(height: 16),
-                        if (order.spareParts.isNotEmpty) ...[
+                        if (currentOrder.spareParts.isNotEmpty) ...[
                           const Text('Repuestos Utilizados:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                           const SizedBox(height: 8),
-                          ...order.spareParts.map((p) => ListTile(
+                          ...currentOrder.spareParts.map((p) => ListTile(
                                 dense: true,
                                 leading: const Icon(Icons.build, size: 18, color: AppColors.primary),
                                 title: Text('${p.code} - ${p.description}', style: const TextStyle(fontSize: 12)),
@@ -692,14 +925,14 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        if (order.status == WorkOrderStatus.finalizada) ...[
+                        if (currentOrder.status == WorkOrderStatus.finalizada) ...[
                           const Text('Diagnóstico de Cierre & Causa Raíz:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
                           const SizedBox(height: 4),
-                          Text(order.rootCause ?? 'Desgaste mecánico operativo normal por horas de funcionamiento.', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.success)),
+                          Text(currentOrder.rootCause ?? 'Desgaste mecánico operativo normal por horas de funcionamiento.', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.success)),
                           const SizedBox(height: 8),
                           const Text('Observaciones Técnicas:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
                           const SizedBox(height: 4),
-                          Text(order.technicianNotes ?? 'Trabajo ejecutado según especificaciones de ingeniería. Equipo entregado 100% operativo.', style: const TextStyle(fontSize: 13, color: Colors.white)),
+                          Text(currentOrder.technicianNotes ?? 'Trabajo ejecutado según especificaciones de ingeniería. Equipo entregado 100% operativo.', style: const TextStyle(fontSize: 13, color: Colors.white)),
                         ],
                       ],
                     ),
@@ -711,7 +944,9 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
         );
       },
     );
-  }
+  },
+);
+}
 
   Widget _buildInfoChip(String label, String value) {
     return Expanded(
@@ -835,6 +1070,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                     : (order.status == WorkOrderStatus.enProceso ? AppColors.warning : AppColors.textSecondary);
 
                 return DataRow(
+                  onSelectChanged: (_) => _showOrderDetailModal(context, order),
                   cells: [
                     DataCell(Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
                     DataCell(
@@ -886,19 +1122,17 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
-                            tooltip: 'Ver Detalle y Evidencias',
+                            tooltip: 'Ver Detalle y Gestionar Pasos',
                             onPressed: () => _showOrderDetailModal(context, order),
                           ),
                           IconButton(
                             icon: const Icon(Icons.picture_as_pdf, size: 18, color: AppColors.warning),
                             tooltip: 'Descargar Informe PDF Oficial (Entrega a Empresa)',
-                            onPressed: () async {
-                              await PdfReportService.downloadOrPrintReport(order);
-                            },
+                            onPressed: () => _handleDownloadPdf(context, order),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, size: 18, color: Colors.white70),
-                            tooltip: 'Modificar Orden de Trabajo',
+                            icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
+                            tooltip: 'Modificar Orden de Trabajo y Pasos',
                             onPressed: () => _showCreateOrderDialog(context, orderToEdit: order),
                           ),
                           IconButton(
