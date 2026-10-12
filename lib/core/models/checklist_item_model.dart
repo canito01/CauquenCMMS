@@ -1,6 +1,7 @@
 enum ChecklistItemType {
   booleanCheck,
   numericMeasurement,
+  photoRequired,
   textObservation,
 }
 

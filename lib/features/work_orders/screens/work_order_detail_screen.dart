@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
+import '../../../core/services/pdf_report_service.dart';
 import '../../common/connectivity_badge.dart';
 
 class WorkOrderDetailScreen extends ConsumerWidget {
@@ -22,8 +23,13 @@ class WorkOrderDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(order.orderNumber),
-        actions: const [
-          Padding(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary),
+            tooltip: 'Descargar Informe PDF Oficial',
+            onPressed: () => PdfReportService.downloadOrPrintReport(order),
+          ),
+          const Padding(
             padding: EdgeInsets.only(right: 16),
             child: ConnectivityBadge(),
           ),

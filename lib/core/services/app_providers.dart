@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/asset_model.dart';
+import '../models/crew_model.dart';
 import '../models/spare_part_model.dart';
+import '../models/stock_movement_model.dart';
 import '../models/sync_item_model.dart';
 import '../models/user_model.dart';
 import '../models/work_order_model.dart';
@@ -77,10 +79,78 @@ class InventoryNotifier extends Notifier<List<SparePartModel>> {
     state = current;
     await storage.saveSpareParts(current);
   }
+
+  Future<void> adjustStock({
+    required String partId,
+    required int delta,
+    required String reason,
+    required String performedBy,
+  }) async {
+    final storage = ref.read(localStorageProvider);
+    SparePartModel? targetPart;
+    int prevStock = 0;
+    int nextStock = 0;
+
+    final updated = state.map((p) {
+      if (p.id == partId) {
+        prevStock = p.stockAvailable;
+        nextStock = (p.stockAvailable + delta).clamp(0, 999999);
+        targetPart = p.copyWith(stockAvailable: nextStock);
+        return targetPart!;
+      }
+      return p;
+    }).toList();
+
+    state = updated;
+    await storage.saveSpareParts(updated);
+
+    if (targetPart != null) {
+      final movement = StockMovementModel(
+        id: const Uuid().v4(),
+        partId: targetPart!.id,
+        partCode: targetPart!.code,
+        partDescription: targetPart!.description,
+        type: delta >= 0 ? StockMovementType.entrada : StockMovementType.salida,
+        quantity: delta.abs(),
+        previousStock: prevStock,
+        newStock: nextStock,
+        reason: reason,
+        performedBy: performedBy,
+        timestamp: DateTime.now(),
+      );
+      await ref.read(stockMovementsProvider.notifier).addMovement(movement);
+    }
+  }
+
+  Future<void> deletePart(String partId) async {
+    final storage = ref.read(localStorageProvider);
+    final updated = state.where((p) => p.id != partId).toList();
+    state = updated;
+    await storage.saveSpareParts(updated);
+  }
 }
 
 final inventoryProvider =
     NotifierProvider<InventoryNotifier, List<SparePartModel>>(InventoryNotifier.new);
+
+// Proveedor de Trazabilidad de Movimientos de Stock
+class StockMovementsNotifier extends Notifier<List<StockMovementModel>> {
+  @override
+  List<StockMovementModel> build() {
+    final storage = ref.watch(localStorageProvider);
+    return storage.getStockMovements();
+  }
+
+  Future<void> addMovement(StockMovementModel movement) async {
+    final storage = ref.read(localStorageProvider);
+    final updated = List<StockMovementModel>.from(state)..insert(0, movement);
+    state = updated;
+    await storage.saveStockMovements(updated);
+  }
+}
+
+final stockMovementsProvider =
+    NotifierProvider<StockMovementsNotifier, List<StockMovementModel>>(StockMovementsNotifier.new);
 
 // Proveedor de Activos / Equipos de Planta
 class AssetsNotifier extends Notifier<List<AssetModel>> {
@@ -207,6 +277,26 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
     if (isOnline && SupabaseConfig.isConfigured) {
       await ref.read(syncQueueProvider.notifier).processSyncQueue();
     }
+  }
+
+  // Modificar orden de trabajo existente
+  Future<void> updateWorkOrder(WorkOrderModel order) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<WorkOrderModel>.from(state);
+    final idx = current.indexWhere((o) => o.id == order.id);
+    if (idx >= 0) {
+      current[idx] = order;
+      state = current;
+      await storage.saveWorkOrders(current);
+    }
+  }
+
+  // Eliminar orden de trabajo
+  Future<void> deleteWorkOrder(String orderId) async {
+    final storage = ref.read(localStorageProvider);
+    final current = state.where((o) => o.id != orderId).toList();
+    state = current;
+    await storage.saveWorkOrders(current);
   }
 
   // Iniciar ejecución de OT
@@ -603,4 +693,106 @@ class AuthNotifier extends Notifier<AuthState> {
 }
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
+
+// Proveedor de Gestión de Personal / Usuarios de Planta
+class UsersNotifier extends Notifier<List<UserModel>> {
+  @override
+  List<UserModel> build() {
+    final storage = ref.watch(localStorageProvider);
+    final list = storage.getUsers();
+    return list.isNotEmpty ? list : MockDataService.getMockUsers();
+  }
+
+  Future<void> addUser(UserModel user) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<UserModel>.from(state)..add(user);
+    state = current;
+    await storage.saveUsers(current);
+  }
+
+  Future<void> updateUser(UserModel user) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<UserModel>.from(state);
+    final idx = current.indexWhere((u) => u.id == user.id);
+    if (idx >= 0) {
+      current[idx] = user;
+      state = current;
+      await storage.saveUsers(current);
+    }
+  }
+
+  Future<void> deleteUser(String userId) async {
+    final storage = ref.read(localStorageProvider);
+    final current = state.where((u) => u.id != userId).toList();
+    state = current;
+    await storage.saveUsers(current);
+  }
+}
+
+final usersProvider =
+    NotifierProvider<UsersNotifier, List<UserModel>>(UsersNotifier.new);
+
+// Proveedor de Cuadrillas de Mantenimiento
+class CrewsNotifier extends Notifier<List<CrewModel>> {
+  @override
+  List<CrewModel> build() {
+    final storage = ref.watch(localStorageProvider);
+    return storage.getCrews();
+  }
+
+  Future<void> addCrew(CrewModel crew) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<CrewModel>.from(state)..add(crew);
+    state = current;
+    await storage.saveCrews(current);
+  }
+
+  Future<void> updateCrew(CrewModel crew) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<CrewModel>.from(state);
+    final idx = current.indexWhere((c) => c.id == crew.id);
+    if (idx >= 0) {
+      current[idx] = crew;
+      state = current;
+      await storage.saveCrews(current);
+    }
+  }
+
+  Future<void> deleteCrew(String crewId) async {
+    final storage = ref.read(localStorageProvider);
+    final current = state.where((c) => c.id != crewId).toList();
+    state = current;
+    await storage.saveCrews(current);
+  }
+
+  Future<void> addMemberToCrew(String crewId, String memberName) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<CrewModel>.from(state);
+    final idx = current.indexWhere((c) => c.id == crewId);
+    if (idx >= 0) {
+      final members = List<String>.from(current[idx].memberNames);
+      if (!members.contains(memberName)) {
+        members.add(memberName);
+        current[idx] = current[idx].copyWith(memberNames: members);
+        state = current;
+        await storage.saveCrews(current);
+      }
+    }
+  }
+
+  Future<void> removeMemberFromCrew(String crewId, String memberName) async {
+    final storage = ref.read(localStorageProvider);
+    final current = List<CrewModel>.from(state);
+    final idx = current.indexWhere((c) => c.id == crewId);
+    if (idx >= 0) {
+      final members = List<String>.from(current[idx].memberNames)..remove(memberName);
+      current[idx] = current[idx].copyWith(memberNames: members);
+      state = current;
+      await storage.saveCrews(current);
+    }
+  }
+}
+
+final crewsProvider =
+    NotifierProvider<CrewsNotifier, List<CrewModel>>(CrewsNotifier.new);
 

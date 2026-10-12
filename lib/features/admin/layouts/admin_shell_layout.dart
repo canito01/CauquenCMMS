@@ -34,6 +34,40 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final isSupervisor = user?.role == UserRole.supervisor;
+    final isAdmin = user?.role == UserRole.admin;
+
+    if (!isSupervisor && !isAdmin) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.danger),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 60, color: AppColors.danger),
+                const SizedBox(height: 16),
+                const Text('ACCESO RESTRINGIDO A ADMINISTRACIÓN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 8),
+                const Text('Solo usuarios con perfil de Supervisor o Administrador pueden acceder a este portal.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/'),
+                  icon: const Icon(Icons.phone_android),
+                  label: const Text('Ir a la App Móvil de Operario'),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,

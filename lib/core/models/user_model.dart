@@ -14,6 +14,8 @@ class UserModel {
   final String specialty;
   final String? phone;
   final String? avatarUrl;
+  final String? crewId;
+  final String? crewName;
 
   const UserModel({
     required this.id,
@@ -25,6 +27,8 @@ class UserModel {
     required this.specialty,
     this.phone,
     this.avatarUrl,
+    this.crewId,
+    this.crewName,
   });
 
   String get roleDisplayName {
@@ -49,6 +53,8 @@ class UserModel {
       'specialty': specialty,
       'phone': phone,
       'avatarUrl': avatarUrl,
+      'crewId': crewId,
+      'crewName': crewName,
     };
   }
 
@@ -63,6 +69,8 @@ class UserModel {
       specialty: map['specialty'] as String? ?? 'Mantenimiento General',
       phone: map['phone'] as String?,
       avatarUrl: map['avatarUrl'] as String?,
+      crewId: map['crewId'] as String?,
+      crewName: map['crewName'] as String?,
     );
   }
 
@@ -76,6 +84,8 @@ class UserModel {
     String? specialty,
     String? phone,
     String? avatarUrl,
+    String? crewId,
+    String? crewName,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -87,6 +97,8 @@ class UserModel {
       specialty: specialty ?? this.specialty,
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      crewId: crewId ?? this.crewId,
+      crewName: crewName ?? this.crewName,
     );
   }
 }

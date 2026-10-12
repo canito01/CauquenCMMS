@@ -40,6 +40,7 @@ class WorkOrderModel {
   final AssetModel asset;
   final String technicianName;
   final String technicianBadge;
+  final String? assignedCrew;
   final DateTime scheduledDate;
   final DateTime? startedAt;
   final DateTime? completedAt;
@@ -66,6 +67,7 @@ class WorkOrderModel {
     required this.asset,
     required this.technicianName,
     required this.technicianBadge,
+    this.assignedCrew,
     required this.scheduledDate,
     this.startedAt,
     this.completedAt,
@@ -97,6 +99,7 @@ class WorkOrderModel {
     AssetModel? asset,
     String? technicianName,
     String? technicianBadge,
+    String? assignedCrew,
     DateTime? scheduledDate,
     DateTime? startedAt,
     DateTime? completedAt,
@@ -123,6 +126,7 @@ class WorkOrderModel {
       asset: asset ?? this.asset,
       technicianName: technicianName ?? this.technicianName,
       technicianBadge: technicianBadge ?? this.technicianBadge,
+      assignedCrew: assignedCrew ?? this.assignedCrew,
       scheduledDate: scheduledDate ?? this.scheduledDate,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
@@ -152,6 +156,7 @@ class WorkOrderModel {
       'asset': asset.toMap(),
       'technicianName': technicianName,
       'technicianBadge': technicianBadge,
+      'assignedCrew': assignedCrew,
       'scheduledDate': scheduledDate.toIso8601String(),
       'startedAt': startedAt?.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
@@ -181,6 +186,7 @@ class WorkOrderModel {
       asset: AssetModel.fromMap(map['asset'] as Map<String, dynamic>),
       technicianName: map['technicianName'] as String,
       technicianBadge: map['technicianBadge'] as String,
+      assignedCrew: map['assignedCrew'] as String?,
       scheduledDate: DateTime.parse(map['scheduledDate'] as String),
       startedAt: map['startedAt'] != null ? DateTime.parse(map['startedAt'] as String) : null,
       completedAt: map['completedAt'] != null ? DateTime.parse(map['completedAt'] as String) : null,

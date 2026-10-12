@@ -33,6 +33,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ? '/admin'
             : '/';
       }
+      // Control estricto: solo administradores y supervisores pueden ingresar a /admin
+      if (state.matchedLocation.startsWith('/admin')) {
+        final role = authState.user?.role;
+        if (role != UserRole.supervisor && role != UserRole.admin) {
+          return '/';
+        }
+      }
       return null;
     },
     routes: [
