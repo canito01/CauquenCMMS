@@ -20,6 +20,33 @@ class TaskTemplateModel {
     required this.steps,
   });
 
+  TaskTemplateModel copyWith({
+    String? id,
+    String? name,
+    String? description,
+    WorkOrderType? type,
+    WorkOrderPriority? defaultPriority,
+    int? estimatedMinutes,
+    List<ChecklistItemModel>? steps,
+  }) {
+    return TaskTemplateModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      defaultPriority: defaultPriority ?? this.defaultPriority,
+      estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
+      steps: steps ?? this.steps,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is TaskTemplateModel && other.id == id);
+
+  @override
+  int get hashCode => id.hashCode;
+
   static List<TaskTemplateModel> getDefaultTemplates() {
     return [
       TaskTemplateModel(

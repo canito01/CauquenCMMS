@@ -5,6 +5,7 @@ import '../models/crew_model.dart';
 import '../models/spare_part_model.dart';
 import '../models/stock_movement_model.dart';
 import '../models/sync_item_model.dart';
+import '../models/task_template_model.dart';
 import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 import '../config/supabase_config.dart';
@@ -795,4 +796,30 @@ class CrewsNotifier extends Notifier<List<CrewModel>> {
 
 final crewsProvider =
     NotifierProvider<CrewsNotifier, List<CrewModel>>(CrewsNotifier.new);
+
+// Proveedor de Protocolos y Plantillas Técnicas Maestras (Riverpod 3 Notifier)
+class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
+  @override
+  List<TaskTemplateModel> build() {
+    return TaskTemplateModel.getDefaultTemplates();
+  }
+
+  void addOrUpdateTemplate(TaskTemplateModel template) {
+    final current = List<TaskTemplateModel>.from(state);
+    final idx = current.indexWhere((t) => t.id == template.id);
+    if (idx >= 0) {
+      current[idx] = template;
+    } else {
+      current.insert(0, template);
+    }
+    state = current;
+  }
+
+  void deleteTemplate(String id) {
+    state = state.where((t) => t.id != id).toList();
+  }
+}
+
+final taskTemplatesProvider =
+    NotifierProvider<TaskTemplatesNotifier, List<TaskTemplateModel>>(TaskTemplatesNotifier.new);
 

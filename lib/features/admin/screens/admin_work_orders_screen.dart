@@ -16,10 +16,24 @@ class AdminWorkOrdersScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminWorkOrdersScreen> createState() => _AdminWorkOrdersScreenState();
 }
 
-class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
+class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   String _searchQuery = '';
+  String _protocolSearchQuery = '';
   WorkOrderStatus? _statusFilter;
   WorkOrderPriority? _priorityFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   // --- Descarga y Manejo de Informe PDF con Feedback ---
   Future<void> _handleDownloadPdf(BuildContext context, WorkOrderModel order) async {
@@ -164,8 +178,251 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
     );
   }
 
+  // --- Modal para Crear o Modificar Protocolo Técnico Maestro ---
+  void _showProtocolDialog(BuildContext context, {TaskTemplateModel? templateToEdit}) {
+    final isEditing = templateToEdit != null;
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController(text: templateToEdit?.name ?? '');
+    final descCtrl = TextEditingController(text: templateToEdit?.description ?? '');
+    final timeCtrl = TextEditingController(text: (templateToEdit?.estimatedMinutes ?? 45).toString());
+    WorkOrderType selectedType = templateToEdit?.type ?? WorkOrderType.preventivo;
+    WorkOrderPriority selectedPriority = templateToEdit?.defaultPriority ?? WorkOrderPriority.normal;
+
+    List<ChecklistItemModel> steps = List<ChecklistItemModel>.from(
+      templateToEdit?.steps ?? [
+        const ChecklistItemModel(
+          id: 'step-init-1',
+          title: 'Bloqueo y consignación de fuentes de energía (LOTO)',
+          type: ChecklistItemType.booleanCheck,
+          isCompleted: false,
+        ),
+      ],
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Icon(isEditing ? Icons.edit : Icons.assignment_turned_in, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Text(isEditing ? 'Modificar Protocolo Técnico' : 'Crear Nuevo Protocolo Técnico Maestro'),
+                ],
+              ),
+              content: SizedBox(
+                width: 700,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre del Protocolo Técnico *',
+                            hintText: 'Ej: Protocolo de Calibración de Celdas de Carga',
+                            prefixIcon: Icon(Icons.rule, size: 20),
+                          ),
+                          validator: (val) => (val == null || val.trim().isEmpty) ? 'El nombre es obligatorio' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: descCtrl,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            labelText: 'Descripción / Alcance del Protocolo',
+                            hintText: 'Objetivo y normas aplicables al procedimiento...',
+                            prefixIcon: Icon(Icons.description_outlined, size: 20),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<WorkOrderType>(
+                                initialValue: selectedType,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(labelText: 'Tipo de Mantenimiento'),
+                                items: WorkOrderType.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(fontSize: 12)))).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setDialogState(() => selectedType = v);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<WorkOrderPriority>(
+                                initialValue: selectedPriority,
+                                dropdownColor: AppColors.surfaceElevated,
+                                decoration: const InputDecoration(labelText: 'Prioridad Sugerida'),
+                                items: WorkOrderPriority.values.map((p) => DropdownMenuItem(value: p, child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 12)))).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setDialogState(() => selectedPriority = v);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: timeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(labelText: 'Tiempo Estimado (min)', prefixIcon: Icon(Icons.timer_outlined, size: 20)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Pasos Técnicos del Protocolo
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${steps.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final newStep = await _showAddStepDialog(context);
+                                if (newStep != null) {
+                                  setDialogState(() => steps.add(newStep));
+                                }
+                              },
+                              icon: const Icon(Icons.add_circle, size: 16),
+                              label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: steps.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(child: Text('No hay pasos cargados en este protocolo. Presione "AGREGAR PASO AL PROTOCOLO".', style: TextStyle(color: AppColors.textMuted, fontSize: 12))),
+                                )
+                              : Column(
+                                  children: steps.asMap().entries.map((entry) {
+                                    final idx = entry.key + 1;
+                                    final step = entry.value;
+
+                                    String stepTypeLabel = 'Inspección Sí/No';
+                                    if (step.type == ChecklistItemType.numericMeasurement) {
+                                      stepTypeLabel = 'Medición (${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""})';
+                                    } else if (step.type == ChecklistItemType.photoRequired) {
+                                      stepTypeLabel = 'Evidencia fotográfica obligatoria';
+                                    }
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 12,
+                                            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                            child: Text('$idx', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                                Text(stepTypeLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                            tooltip: 'Modificar este paso',
+                                            onPressed: () async {
+                                              final edited = await _showAddStepDialog(context, initialStep: step);
+                                              if (edited != null) {
+                                                setDialogState(() {
+                                                  steps[entry.key] = edited;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                                            tooltip: 'Eliminar este paso',
+                                            onPressed: () {
+                                              setDialogState(() => steps.removeAt(entry.key));
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+                ElevatedButton(
+                  onPressed: () {
+                    if (!formKey.currentState!.validate()) return;
+                    if (steps.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Debe agregar al menos un paso técnico al protocolo'), backgroundColor: AppColors.warning),
+                      );
+                      return;
+                    }
+
+                    final newTemplate = TaskTemplateModel(
+                      id: isEditing ? templateToEdit.id : const Uuid().v4(),
+                      name: nameCtrl.text.trim(),
+                      description: descCtrl.text.trim().isEmpty ? 'Procedimiento técnico estandarizado de planta' : descCtrl.text.trim(),
+                      type: selectedType,
+                      defaultPriority: selectedPriority,
+                      estimatedMinutes: int.tryParse(timeCtrl.text.trim()) ?? 45,
+                      steps: steps,
+                    );
+
+                    ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(newTemplate);
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(isEditing ? 'Protocolo "${newTemplate.name}" actualizado' : 'Nuevo protocolo "${newTemplate.name}" creado con éxito'), backgroundColor: AppColors.success),
+                    );
+                  },
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Crear Protocolo'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // --- Modal para Despachar o Modificar Orden de Trabajo ---
-  void _showCreateOrderDialog(BuildContext context, {WorkOrderModel? orderToEdit}) {
+  void _showCreateOrderDialog(BuildContext context, {WorkOrderModel? orderToEdit, TaskTemplateModel? initialTemplate}) {
     final isEditing = orderToEdit != null;
     final formKey = GlobalKey<FormState>();
     final rawAssets = ref.read(assetsProvider);
@@ -173,10 +430,10 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
     final rawUsers = ref.read(usersProvider);
     final plantUsers = rawUsers.isNotEmpty ? rawUsers : MockDataService.getMockUsers();
     final plantCrews = ref.read(crewsProvider);
-    final templates = TaskTemplateModel.getDefaultTemplates();
+    final templates = ref.read(taskTemplatesProvider);
 
-    final titleCtrl = TextEditingController(text: orderToEdit?.title ?? '');
-    final descCtrl = TextEditingController(text: orderToEdit?.description ?? '');
+    final titleCtrl = TextEditingController(text: orderToEdit?.title ?? (initialTemplate?.name ?? ''));
+    final descCtrl = TextEditingController(text: orderToEdit?.description ?? (initialTemplate?.description ?? ''));
 
     String selectedAssetId = (orderToEdit != null && assets.any((a) => a.id == orderToEdit.asset.id))
         ? orderToEdit.asset.id
@@ -194,11 +451,11 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
     String selectedTechnician = defaultUser.name;
     String selectedBadge = defaultUser.badge;
 
-    WorkOrderPriority selectedPriority = orderToEdit?.priority ?? WorkOrderPriority.normal;
-    WorkOrderType selectedType = orderToEdit?.type ?? WorkOrderType.correctivo;
+    WorkOrderPriority selectedPriority = orderToEdit?.priority ?? (initialTemplate?.defaultPriority ?? WorkOrderPriority.normal);
+    WorkOrderType selectedType = orderToEdit?.type ?? (initialTemplate?.type ?? WorkOrderType.correctivo);
 
     List<ChecklistItemModel> customSteps = List<ChecklistItemModel>.from(
-      orderToEdit?.checklist ?? [
+      orderToEdit?.checklist ?? (initialTemplate?.steps ?? [
         const ChecklistItemModel(
           id: 'step-1',
           title: 'Bloqueo y consignación de energía eléctrica y neumática (LOTO)',
@@ -226,7 +483,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
           type: ChecklistItemType.photoRequired,
           isCompleted: false,
         ),
-      ],
+      ]),
     );
 
     showDialog(
@@ -491,10 +748,31 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                         const SizedBox(height: 20),
 
                         // Diseñador Visual Paso a Paso de Tareas (Step-by-step Builder)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Configura los pasos del protocolo para el operario (inspección Sí/No, medición con tolerancias o fotos requeridas).',
+                                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${customSteps.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary)),
+                            Text('PASOS TÉCNICOS DEL PROTOCOLO (${customSteps.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: AppColors.primary)),
                             ElevatedButton.icon(
                               onPressed: () async {
                                 final newStep = await _showAddStepDialog(context);
@@ -502,12 +780,12 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                                   setDialogState(() => customSteps.add(newStep));
                                 }
                               },
-                              icon: const Icon(Icons.add, size: 14),
-                              label: const Text('Agregar Paso'),
+                              icon: const Icon(Icons.add_circle, size: 16),
+                              label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.surfaceElevated,
-                                foregroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),
                             ),
                           ],
@@ -813,12 +1091,12 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                                       }
                                     }
                                   },
-                                  icon: const Icon(Icons.add, size: 14),
-                                  label: const Text('Agregar Paso'),
+                                  icon: const Icon(Icons.add_circle, size: 16),
+                                  label: const Text('AGREGAR PASO AL PROTOCOLO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                   ),
                                 ),
                               ],
@@ -990,6 +1268,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final workOrders = ref.watch(workOrdersProvider);
+    final templates = ref.watch(taskTemplatesProvider);
 
     final filtered = workOrders.where((order) {
       final matchesSearch = _searchQuery.isEmpty ||
@@ -1005,6 +1284,44 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
       return matchesSearch && matchesStatus && matchesPriority;
     }).toList();
 
+    return Column(
+      children: [
+        // Selector de Pestañas Principal
+        Container(
+          color: AppColors.surface,
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: AppColors.primary,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.assignment_outlined),
+                text: 'Órdenes de Trabajo Despachadas (${filtered.length})',
+              ),
+              Tab(
+                icon: const Icon(Icons.rule),
+                text: 'Protocolos Técnicos & Plantillas Maestras (${templates.length})',
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildWorkOrdersTab(filtered, context),
+              _buildProtocolsTab(templates, context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- Pestaña 1: Órdenes de Trabajo Despachadas ---
+  Widget _buildWorkOrdersTab(List<WorkOrderModel> filtered, BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -1085,7 +1402,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                 DataColumn(label: Text('Tipo', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Prioridad', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Destinatario (Técnico / Cuadrilla)', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Progreso', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Progreso & Pasos', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Acciones & Informe', style: TextStyle(fontWeight: FontWeight.bold))),
               ],
@@ -1133,7 +1450,24 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                         ],
                       ),
                     ),
-                    DataCell(Text('${order.completedTasksCount}/${order.totalTasksCount} (${(order.progressPercentage * 100).toInt()}%)', style: const TextStyle(fontSize: 11))),
+                    DataCell(
+                      InkWell(
+                        onTap: () => _showOrderDetailModal(context, order),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            '${order.completedTasksCount}/${order.totalTasksCount} pasos (${(order.progressPercentage * 100).toInt()}%)',
+                            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
                     DataCell(
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1147,7 +1481,7 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
-                            tooltip: 'Ver Detalle y Gestionar Pasos',
+                            tooltip: 'Ver Detalle y Gestionar Pasos del Protocolo',
                             onPressed: () => _showOrderDetailModal(context, order),
                           ),
                           IconButton(
@@ -1174,6 +1508,272 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  // --- Pestaña 2: Protocolos Técnicos & Plantillas Maestras ---
+  Widget _buildProtocolsTab(List<TaskTemplateModel> templates, BuildContext context) {
+    final filteredTemplates = templates.where((t) {
+      if (_protocolSearchQuery.isEmpty) return true;
+      final q = _protocolSearchQuery.toLowerCase();
+      return t.name.toLowerCase().contains(q) ||
+          t.description.toLowerCase().contains(q) ||
+          t.steps.any((s) => s.title.toLowerCase().contains(q));
+    }).toList();
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Catálogo de Protocolos Técnicos Maestros', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(height: 4),
+                Text('${templates.length} protocolos estandarizados con procedimientos paso a paso y tolerancias', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showProtocolDialog(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('NUEVO PROTOCOLO TÉCNICO'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Barra de Búsqueda de Protocolos
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+          child: TextField(
+            decoration: const InputDecoration(
+              hintText: 'Buscar protocolo por nombre, máquina o procedimiento...',
+              prefixIcon: Icon(Icons.search, color: AppColors.primary),
+              isDense: true,
+              border: InputBorder.none,
+            ),
+            onChanged: (val) => setState(() => _protocolSearchQuery = val),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        if (filteredTemplates.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+            child: const Center(child: Text('No se encontraron protocolos técnicos.')),
+          )
+        else
+          ...filteredTemplates.map((template) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              color: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.rule, color: AppColors.primary, size: 24),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(template.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(template.type.name.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text('${template.estimatedMinutes} min', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(template.description, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+
+                    // Pasos técnicos del protocolo
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('PASOS TÉCNICOS DEL PROTOCOLO (${template.steps.length}):', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final newStep = await _showAddStepDialog(context);
+                            if (newStep != null) {
+                              final updated = template.copyWith(
+                                steps: List<ChecklistItemModel>.from(template.steps)..add(newStep),
+                              );
+                              ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(updated);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Paso "${newStep.title}" agregado al protocolo ${template.name}'), backgroundColor: AppColors.success),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.add_circle, size: 14),
+                          label: const Text('AGREGAR PASO AL PROTOCOLO'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    ...template.steps.asMap().entries.map((stepEntry) {
+                      final sIdx = stepEntry.key + 1;
+                      final step = stepEntry.value;
+
+                      String badgeText = 'Inspección Sí/No';
+                      Color badgeColor = AppColors.primary;
+                      if (step.type == ChecklistItemType.numericMeasurement) {
+                        badgeText = 'Medición: ${step.minAcceptable ?? 0} a ${step.maxAcceptable ?? 0} ${step.unit ?? ""}';
+                        badgeColor = AppColors.warning;
+                      } else if (step.type == ChecklistItemType.photoRequired) {
+                        badgeText = 'Foto Obligatoria';
+                        badgeColor = Colors.purpleAccent;
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 11,
+                              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                              child: Text('$sIdx', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(step.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor.withValues(alpha: 0.4))),
+                              child: Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor)),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                              tooltip: 'Modificar este paso',
+                              onPressed: () async {
+                                final edited = await _showAddStepDialog(context, initialStep: step);
+                                if (edited != null) {
+                                  final newSteps = List<ChecklistItemModel>.from(template.steps);
+                                  newSteps[stepEntry.key] = edited;
+                                  ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(template.copyWith(steps: newSteps));
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                              tooltip: 'Eliminar este paso',
+                              onPressed: () {
+                                final newSteps = List<ChecklistItemModel>.from(template.steps)..removeAt(stepEntry.key);
+                                ref.read(taskTemplatesProvider.notifier).addOrUpdateTemplate(template.copyWith(steps: newSteps));
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+
+                    // Barra de Acciones del Protocolo
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _showProtocolDialog(context, templateToEdit: template),
+                          icon: const Icon(Icons.edit, size: 14),
+                          label: const Text('Editar Protocolo', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                          onPressed: () {
+                            ref.read(taskTemplatesProvider.notifier).deleteTemplate(template.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Protocolo ${template.name} eliminado'), backgroundColor: AppColors.danger),
+                            );
+                          },
+                          icon: const Icon(Icons.delete, size: 14),
+                          label: const Text('Eliminar', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                          onPressed: () {
+                            _showCreateOrderDialog(context, initialTemplate: template);
+                          },
+                          icon: const Icon(Icons.send, size: 14),
+                          label: const Text('Despachar OT con este Protocolo', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
       ],
     );
   }
