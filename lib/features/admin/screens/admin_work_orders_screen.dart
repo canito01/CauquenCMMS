@@ -1236,13 +1236,9 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: AppColors.border),
                           ),
-                          child: customSteps.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Center(child: Text('No hay pasos agregados. Presiona "AGREGAR PASO" o carga una plantilla.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))),
-                                )
-                              : Column(
-                                  children: customStages.map((stage) {
+                          child: Column(
+                            children: [
+                              ...customStages.map((stage) {
                                     final stageSteps = customSteps.where((s) => s.stageId == stage.id || (s.stageId.isEmpty && stage == customStages.first)).toList();
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 8),
@@ -1278,6 +1274,27 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                                   icon: const Icon(Icons.add, size: 13),
                                                   label: const Text('Paso', style: TextStyle(fontSize: 11)),
                                                   style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.primary),
+                                                  tooltip: 'Modificar nombre de etapa',
+                                                  splashRadius: 14,
+                                                  onPressed: () async {
+                                                    final edited = await _showAddStageDialog(context, stageToEdit: stage, existingStagesCount: customStages.length);
+                                                    if (edited != null) {
+                                                      final sIdx = customStages.indexOf(stage);
+                                                      if (sIdx >= 0) {
+                                                        setDialogState(() {
+                                                          customStages[sIdx] = edited;
+                                                          for (int i = 0; i < customSteps.length; i++) {
+                                                            if (customSteps[i].stageId == stage.id) {
+                                                              customSteps[i] = customSteps[i].copyWith(stageName: edited.name);
+                                                            }
+                                                          }
+                                                        });
+                                                      }
+                                                    }
+                                                  },
                                                 ),
                                                 if (customStages.length > 1)
                                                   IconButton(
@@ -1364,8 +1381,46 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                         ],
                                       ),
                                     );
-                                  }).toList(),
-                                ),
+                                  }),
+
+                                  // Botón Prominente para Añadir Nueva Etapa a la Orden
+                                  InkWell(
+                                    onTap: () async {
+                                      final newStage = await _showAddStageDialog(context, existingStagesCount: customStages.length);
+                                      if (newStage != null) {
+                                        setDialogState(() => customStages.add(newStage));
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      margin: const EdgeInsets.only(top: 4, bottom: 4),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: const [
+                                          Icon(Icons.add_to_photos, size: 15, color: AppColors.primary),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            '+ AÑADIR NUEVA ETAPA A ESTA ORDEN',
+                                            style: TextStyle(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                         ),
                       ],
                     ),
@@ -2664,6 +2719,17 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                       visualDensity: VisualDensity.compact,
                                     ),
                                   ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                    tooltip: 'Modificar nombre de etapa',
+                                    splashRadius: 16,
+                                    onPressed: () async {
+                                      final edited = await _showAddStageDialog(context, stageToEdit: stage, existingStagesCount: template.resolvedStages.length);
+                                      if (edited != null) {
+                                        ref.read(taskTemplatesProvider.notifier).updateStageInTemplate(template.id, edited);
+                                      }
+                                    },
+                                  ),
                                   if (template.resolvedStages.length > 1)
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
@@ -2772,7 +2838,49 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                       );
                     }),
-                    const SizedBox(height: 12),
+
+                    // Botón para añadir nueva etapa directamente en la tarjeta del protocolo
+                    InkWell(
+                      onTap: () async {
+                        final newStage = await _showAddStageDialog(context, existingStagesCount: template.resolvedStages.length);
+                        if (newStage != null) {
+                          ref.read(taskTemplatesProvider.notifier).addStageToTemplate(template.id, newStage);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Etapa "${newStage.name}" agregada al protocolo ${template.name}'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        margin: const EdgeInsets.only(top: 2, bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.add_to_photos, size: 15, color: AppColors.primary),
+                            SizedBox(width: 8),
+                            Text(
+                              '+ AÑADIR NUEVA ETAPA AL PROTOCOLO',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
 
                     // Barra de Acciones del Protocolo
                     Row(

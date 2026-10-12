@@ -966,8 +966,19 @@ class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
   void addStageToTemplate(String templateId, WorkflowStageModel stage) {
     state = state.map((t) {
       if (t.id == templateId) {
-        final stages = List<WorkflowStageModel>.from(t.stages)..add(stage);
+        final stages = List<WorkflowStageModel>.from(t.resolvedStages)..add(stage);
         return t.copyWith(stages: stages);
+      }
+      return t;
+    }).toList();
+  }
+
+  void updateStageInTemplate(String templateId, WorkflowStageModel updatedStage) {
+    state = state.map((t) {
+      if (t.id == templateId) {
+        final stages = t.resolvedStages.map((s) => s.id == updatedStage.id ? updatedStage : s).toList();
+        final steps = t.steps.map((s) => s.stageId == updatedStage.id ? s.copyWith(stageName: updatedStage.name) : s).toList();
+        return t.copyWith(stages: stages, steps: steps);
       }
       return t;
     }).toList();
@@ -976,7 +987,7 @@ class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
   void deleteStageFromTemplate(String templateId, String stageId) {
     state = state.map((t) {
       if (t.id == templateId) {
-        final stages = t.stages.where((s) => s.id != stageId).toList();
+        final stages = t.resolvedStages.where((s) => s.id != stageId).toList();
         final steps = t.steps.where((s) => s.stageId != stageId).toList();
         return t.copyWith(stages: stages, steps: steps);
       }
