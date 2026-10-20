@@ -41,8 +41,8 @@ jobs:
       - name: Build Web Portal (GitHub Pages)
         run: |
           flutter build web --release --base-href "/CauquenCMMS/"
-          cp build/app/outputs/flutter-apk/app-release.apk build/web/CauquenCMMS.apk
           cp build/web/index.html build/web/404.html
+          touch build/web/.nojekyll
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4

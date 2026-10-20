@@ -117,7 +117,10 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () {
-                  FileDownloadService.downloadUrl('CauquenCMMS.apk', 'CauquenCMMS.apk');
+                  FileDownloadService.downloadUrl(
+                    'https://github.com/canito01/CauquenCMMS/releases/download/v1.0.0/CauquenCMMS.apk',
+                    'CauquenCMMS.apk',
+                  );
                   Navigator.pop(ctx);
                 },
                 icon: const Icon(Icons.download_rounded, size: 20),
