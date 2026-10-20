@@ -698,102 +698,110 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> with Single
                 padding: const EdgeInsets.all(24),
                 children: [
                   Container(
+                    width: double.infinity,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
-                        columns: const [
-                          DataColumn(label: Text('Legajo', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Nombre y Apellido', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Rol de Planta', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Cuadrilla Asignada', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Turno Operativo', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Especialidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Contacto', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Acciones', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        rows: filteredUsers.map((user) {
-                          final isSupervisor = user.role == UserRole.supervisor;
-                          final isAdmin = user.role == UserRole.admin;
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
+                              columns: const [
+                                DataColumn(label: Text('Legajo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Nombre y Apellido', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Rol de Planta', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Cuadrilla Asignada', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Turno Operativo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Especialidad', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Contacto', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Acciones', style: TextStyle(fontWeight: FontWeight.bold))),
+                              ],
+                              rows: filteredUsers.map((user) {
+                                final isSupervisor = user.role == UserRole.supervisor;
+                                final isAdmin = user.role == UserRole.admin;
 
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(user.badge, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 14,
-                                      backgroundColor: isSupervisor || isAdmin
-                                          ? AppColors.warning.withValues(alpha: 0.2)
-                                          : AppColors.primary.withValues(alpha: 0.2),
-                                      child: Icon(
-                                        isSupervisor || isAdmin ? Icons.verified_user : Icons.engineering,
-                                        size: 14,
-                                        color: isSupervisor || isAdmin ? AppColors.warning : AppColors.primary,
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(user.badge, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                                    DataCell(
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 14,
+                                            backgroundColor: isSupervisor || isAdmin
+                                                ? AppColors.warning.withValues(alpha: 0.2)
+                                                : AppColors.primary.withValues(alpha: 0.2),
+                                            child: Icon(
+                                              isSupervisor || isAdmin ? Icons.verified_user : Icons.engineering,
+                                              size: 14,
+                                              color: isSupervisor || isAdmin ? AppColors.warning : AppColors.primary,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
-                                    Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: (isSupervisor || isAdmin ? AppColors.warning : AppColors.primary).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    user.roleDisplayName,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSupervisor || isAdmin ? AppColors.warning : AppColors.primary,
+                                    DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: (isSupervisor || isAdmin ? AppColors.warning : AppColors.primary).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          user.roleDisplayName,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: isSupervisor || isAdmin ? AppColors.warning : AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  user.crewName ?? 'Sin cuadrilla',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: user.crewName != null ? AppColors.textPrimary : AppColors.textMuted,
-                                    fontWeight: user.crewName != null ? FontWeight.w600 : FontWeight.normal,
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text(user.shift, style: const TextStyle(fontSize: 12))),
-                              DataCell(Text(user.specialty, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                              DataCell(Text(user.phone ?? user.email, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
-                                      tooltip: 'Modificar Empleado',
-                                      onPressed: () => _showUserDialog(userToEdit: user),
+                                    DataCell(
+                                      Text(
+                                        user.crewName ?? 'Sin cuadrilla',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: user.crewName != null ? AppColors.textPrimary : AppColors.textMuted,
+                                          fontWeight: user.crewName != null ? FontWeight.w600 : FontWeight.normal,
+                                        ),
+                                      ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                                      tooltip: 'Dar de Baja',
-                                      onPressed: () => _confirmDeleteUser(user),
+                                    DataCell(Text(user.shift, style: const TextStyle(fontSize: 12))),
+                                    DataCell(Text(user.specialty, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                                    DataCell(Text(user.phone ?? user.email, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                                    DataCell(
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
+                                            tooltip: 'Modificar Empleado',
+                                            onPressed: () => _showUserDialog(userToEdit: user),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                            tooltip: 'Dar de Baja',
+                                            onPressed: () => _confirmDeleteUser(user),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

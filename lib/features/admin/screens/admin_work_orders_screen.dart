@@ -2516,186 +2516,194 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
 
         // Tabla de Órdenes de Trabajo (MaintainX Clean Minimalist SaaS Table)
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border),
           ),
           clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              showCheckboxColumn: false,
-              headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
-              dataRowMinHeight: 52,
-              dataRowMaxHeight: 56,
-              columns: const [
-                DataColumn(label: Text('Nº OT')),
-                DataColumn(label: Text('TÍTULO & EQUIPO')),
-                DataColumn(label: Text('TIPO')),
-                DataColumn(label: Text('PRIORIDAD')),
-                DataColumn(label: Text('DESTINATARIO')),
-                DataColumn(label: Text('PROGRESO')),
-                DataColumn(label: Text('ESTADO')),
-                DataColumn(label: Text('ACCIONES')),
-              ],
-              rows: filtered.map((order) {
-                final isSelectedRow = order.id == _selectedOrderId;
-                final isUrgent = order.priority == WorkOrderPriority.urgente;
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    showCheckboxColumn: false,
+                    headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+                    headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+                    dataRowMinHeight: 52,
+                    dataRowMaxHeight: 56,
+                    columns: const [
+                      DataColumn(label: Text('Nº OT')),
+                      DataColumn(label: Text('TÍTULO & EQUIPO')),
+                      DataColumn(label: Text('TIPO')),
+                      DataColumn(label: Text('PRIORIDAD')),
+                      DataColumn(label: Text('DESTINATARIO')),
+                      DataColumn(label: Text('PROGRESO')),
+                      DataColumn(label: Text('ESTADO')),
+                      DataColumn(label: Text('ACCIONES')),
+                    ],
+                    rows: filtered.map((order) {
+                      final isSelectedRow = order.id == _selectedOrderId;
+                      final isUrgent = order.priority == WorkOrderPriority.urgente;
 
-                final statusColor = order.status == WorkOrderStatus.finalizada
-                    ? AppColors.success
-                    : (order.status == WorkOrderStatus.enProceso
-                        ? AppColors.warning
-                        : (order.status == WorkOrderStatus.pausada ? AppColors.paused : AppColors.textSecondary));
-                final statusBg = order.status == WorkOrderStatus.finalizada
-                    ? AppColors.successContainer
-                    : (order.status == WorkOrderStatus.enProceso
-                        ? AppColors.warningContainer
-                        : (order.status == WorkOrderStatus.pausada ? AppColors.pausedContainer : AppColors.surfaceElevated));
+                      final statusColor = order.status == WorkOrderStatus.finalizada
+                          ? AppColors.success
+                          : (order.status == WorkOrderStatus.enProceso
+                              ? AppColors.warning
+                              : (order.status == WorkOrderStatus.pausada ? AppColors.paused : AppColors.textSecondary));
+                      final statusBg = order.status == WorkOrderStatus.finalizada
+                          ? AppColors.successContainer
+                          : (order.status == WorkOrderStatus.enProceso
+                              ? AppColors.warningContainer
+                              : (order.status == WorkOrderStatus.pausada ? AppColors.pausedContainer : AppColors.surfaceElevated));
 
-                return DataRow(
-                  selected: isSelectedRow,
-                  color: WidgetStateProperty.resolveWith<Color?>((states) {
-                    if (isSelectedRow) return AppColors.primaryContainer.withValues(alpha: 0.7);
-                    if (states.contains(WidgetState.hovered)) return AppColors.surfaceLight;
-                    return null;
-                  }),
-                  onSelectChanged: (_) {
-                    setState(() {
-                      if (_selectedOrderId == order.id) {
-                        _selectedOrderId = null;
-                      } else {
-                        _selectedOrderId = order.id;
-                      }
-                    });
-                  },
-                  cells: [
-                    DataCell(
-                      Text(
-                        order.orderNumber,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: isSelectedRow ? AppColors.primary : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            order.title,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            '${order.asset.code} • ${order.asset.name}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    DataCell(Text(order.type.name.toUpperCase(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isUrgent ? AppColors.dangerContainer : AppColors.surfaceSecondary,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isUrgent ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
-                        ),
-                        child: Text(
-                          order.priority.name.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: isUrgent ? AppColors.danger : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(order.technicianName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                          if (order.assignedCrew != null)
-                            Text(order.assignedCrew!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-                        ],
-                      ),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryContainer,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                        ),
-                        child: Text(
-                          '${order.completedTasksCount}/${order.totalTasksCount} (${(order.progressPercentage * 100).toInt()}%)',
-                          style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          order.status.name.toUpperCase(),
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              isSelectedRow ? Icons.visibility : Icons.visibility_outlined,
-                              size: 17,
-                              color: AppColors.primary,
+                      return DataRow(
+                        selected: isSelectedRow,
+                        color: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (isSelectedRow) return AppColors.primaryContainer.withValues(alpha: 0.7);
+                          if (states.contains(WidgetState.hovered)) return AppColors.surfaceLight;
+                          return null;
+                        }),
+                        onSelectChanged: (_) {
+                          setState(() {
+                            if (_selectedOrderId == order.id) {
+                              _selectedOrderId = null;
+                            } else {
+                              _selectedOrderId = order.id;
+                            }
+                          });
+                        },
+                        cells: [
+                          DataCell(
+                            Text(
+                              order.orderNumber,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                color: isSelectedRow ? AppColors.primary : AppColors.textPrimary,
+                              ),
                             ),
-                            tooltip: 'Inspeccionar en panel lateral',
-                            onPressed: () {
-                              setState(() {
-                                _selectedOrderId = isSelectedRow ? null : order.id;
-                              });
-                            },
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.picture_as_pdf, size: 17, color: AppColors.primary),
-                            tooltip: 'Descargar Informe PDF Oficial',
-                            onPressed: () => _handleDownloadPdf(context, order),
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  order.title,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${order.asset.code} • ${order.asset.name}',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textSecondary),
-                            tooltip: 'Modificar orden',
-                            onPressed: () => _showCreateOrderDialog(context, orderToEdit: order),
+                          DataCell(Text(order.type.name.toUpperCase(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isUrgent ? AppColors.dangerContainer : AppColors.surfaceSecondary,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: isUrgent ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
+                              ),
+                              child: Text(
+                                order.priority.name.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: isUrgent ? AppColors.danger : AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.danger),
-                            tooltip: 'Eliminar orden',
-                            onPressed: () => _confirmDeleteOrder(order),
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(order.technicianName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                if (order.assignedCrew != null)
+                                  Text(order.assignedCrew!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                              ],
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryContainer,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                              ),
+                              child: Text(
+                                '${order.completedTasksCount}/${order.totalTasksCount} (${(order.progressPercentage * 100).toInt()}%)',
+                                style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusBg,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                order.status.name.toUpperCase(),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    isSelectedRow ? Icons.visibility : Icons.visibility_outlined,
+                                    size: 17,
+                                    color: AppColors.primary,
+                                  ),
+                                  tooltip: 'Inspeccionar en panel lateral',
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedOrderId = isSelectedRow ? null : order.id;
+                                    });
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.picture_as_pdf, size: 17, color: AppColors.primary),
+                                  tooltip: 'Descargar Informe PDF Oficial',
+                                  onPressed: () => _handleDownloadPdf(context, order),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textSecondary),
+                                  tooltip: 'Modificar orden',
+                                  onPressed: () => _showCreateOrderDialog(context, orderToEdit: order),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.danger),
+                                  tooltip: 'Eliminar orden',
+                                  onPressed: () => _confirmDeleteOrder(order),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],

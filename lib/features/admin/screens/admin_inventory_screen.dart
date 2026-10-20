@@ -576,88 +576,96 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                 padding: const EdgeInsets.all(24),
                 children: [
                   Container(
+                    width: double.infinity,
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
                     clipBehavior: Clip.antiAlias,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
-                        headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
-                        dataRowMinHeight: 50,
-                        dataRowMaxHeight: 54,
-                        columns: const [
-                          DataColumn(label: Text('CÓDIGO SKU')),
-                          DataColumn(label: Text('DESCRIPCIÓN DE PIEZA')),
-                          DataColumn(label: Text('UBICACIÓN ALMACÉN')),
-                          DataColumn(label: Text('STOCK DISPONIBLE')),
-                          DataColumn(label: Text('CONSUMO ACUM.')),
-                          DataColumn(label: Text('ESTADO STOCK')),
-                          DataColumn(label: Text('AJUSTE RÁPIDO')),
-                          DataColumn(label: Text('ACCIONES')),
-                        ],
-                        rows: filteredParts.map((part) {
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(part.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                              DataCell(Text(part.description, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
-                              DataCell(Text(part.locationWarehouse, style: const TextStyle(color: AppColors.textSecondary))),
-                              DataCell(Text('${part.stockAvailable} ${part.unit}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary))),
-                              DataCell(Text('${part.consumedQuantity} ${part.unit}', style: const TextStyle(color: AppColors.textMuted))),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: (part.isLowStock ? AppColors.danger : AppColors.success).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    part.isLowStock ? 'CRÍTICO / BAJO' : 'ABASTECIDO',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: part.isLowStock ? AppColors.danger : AppColors.success,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+                              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+                              dataRowMinHeight: 50,
+                              dataRowMaxHeight: 54,
+                              columns: const [
+                                DataColumn(label: Text('CÓDIGO SKU')),
+                                DataColumn(label: Text('DESCRIPCIÓN DE PIEZA')),
+                                DataColumn(label: Text('UBICACIÓN ALMACÉN')),
+                                DataColumn(label: Text('STOCK DISPONIBLE')),
+                                DataColumn(label: Text('CONSUMO ACUM.')),
+                                DataColumn(label: Text('ESTADO STOCK')),
+                                DataColumn(label: Text('AJUSTE RÁPIDO')),
+                                DataColumn(label: Text('ACCIONES')),
+                              ],
+                              rows: filteredParts.map((part) {
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(part.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                                    DataCell(Text(part.description, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
+                                    DataCell(Text(part.locationWarehouse, style: const TextStyle(color: AppColors.textSecondary))),
+                                    DataCell(Text('${part.stockAvailable} ${part.unit}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary))),
+                                    DataCell(Text('${part.consumedQuantity} ${part.unit}', style: const TextStyle(color: AppColors.textMuted))),
+                                    DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: (part.isLowStock ? AppColors.danger : AppColors.success).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          part.isLowStock ? 'CRÍTICO / BAJO' : 'ABASTECIDO',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: part.isLowStock ? AppColors.danger : AppColors.success,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
-                              // Botones rápidos de ajuste (+ / -)
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.add_circle_outline, color: AppColors.success, size: 20),
-                                      tooltip: 'Sumar Stock (+)',
-                                      onPressed: () => _showStockAdjustmentDialog(preselectedPart: part, isAddition: true),
+                                    // Botones rápidos de ajuste (+ / -)
+                                    DataCell(
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.add_circle_outline, color: AppColors.success, size: 20),
+                                            tooltip: 'Sumar Stock (+)',
+                                            onPressed: () => _showStockAdjustmentDialog(preselectedPart: part, isAddition: true),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger, size: 20),
+                                            tooltip: 'Restar Stock (-)',
+                                            onPressed: () => _showStockAdjustmentDialog(preselectedPart: part, isAddition: false),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger, size: 20),
-                                      tooltip: 'Restar Stock (-)',
-                                      onPressed: () => _showStockAdjustmentDialog(preselectedPart: part, isAddition: false),
+                                    // Acciones de editar y eliminar
+                                    DataCell(
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
+                                            tooltip: 'Modificar Repuesto',
+                                            onPressed: () => _showPartDialog(partToEdit: part),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                            tooltip: 'Eliminar Insumo',
+                                            onPressed: () => _confirmDeletePart(part),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
-                                ),
-                              ),
-                              // Acciones de editar y eliminar
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, size: 18, color: AppColors.primary),
-                                      tooltip: 'Modificar Repuesto',
-                                      onPressed: () => _showPartDialog(partToEdit: part),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                                      tooltip: 'Eliminar Insumo',
-                                      onPressed: () => _confirmDeletePart(part),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -685,52 +693,60 @@ class _AdminInventoryScreenState extends ConsumerState<AdminInventoryScreen> wit
                     ),
                   ] else ...[
                     Container(
+                      width: double.infinity,
                       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
                       clipBehavior: Clip.antiAlias,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
-                          columns: const [
-                            DataColumn(label: Text('Fecha y Hora', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Tipo Movimiento', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Código Repuesto', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Descripción', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Cantidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Stock Anterior ➔ Nuevo', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Motivo', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Responsable', style: TextStyle(fontWeight: FontWeight.bold))),
-                          ],
-                          rows: stockMovements.map((mov) {
-                            final isEntrada = mov.type == StockMovementType.entrada;
-                            final movColor = isEntrada ? AppColors.success : AppColors.danger;
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                              child: DataTable(
+                                headingRowColor: WidgetStateProperty.all(AppColors.surfaceElevated),
+                                columns: const [
+                                  DataColumn(label: Text('Fecha y Hora', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Tipo Movimiento', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Código Repuesto', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Descripción', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Cantidad', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Stock Anterior ➔ Nuevo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Motivo', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('Responsable', style: TextStyle(fontWeight: FontWeight.bold))),
+                                ],
+                                rows: stockMovements.map((mov) {
+                                  final isEntrada = mov.type == StockMovementType.entrada;
+                                  final movColor = isEntrada ? AppColors.success : AppColors.danger;
 
-                            return DataRow(
-                              cells: [
-                                DataCell(Text(dateFormat.format(mov.timestamp), style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: movColor.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      isEntrada ? 'ENTRADA (+)' : 'SALIDA (-)',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: movColor),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(Text(mov.partCode, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                                DataCell(Text(mov.partDescription, style: const TextStyle(fontSize: 12))),
-                                DataCell(Text('${isEntrada ? "+" : "-"}${mov.quantity}', style: TextStyle(fontWeight: FontWeight.bold, color: movColor))),
-                                DataCell(Text('${mov.previousStock} ➔ ${mov.newStock}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                                DataCell(Text(mov.reason, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                                DataCell(Text(mov.performedBy, style: const TextStyle(fontSize: 12))),
-                              ],
-                            );
-                          }).toList(),
-                        ),
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(dateFormat.format(mov.timestamp), style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: movColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            isEntrada ? 'ENTRADA (+)' : 'SALIDA (-)',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: movColor),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(Text(mov.partCode, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                                      DataCell(Text(mov.partDescription, style: const TextStyle(fontSize: 12))),
+                                      DataCell(Text('${isEntrada ? "+" : "-"}${mov.quantity}', style: TextStyle(fontWeight: FontWeight.bold, color: movColor))),
+                                      DataCell(Text('${mov.previousStock} ➔ ${mov.newStock}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                                      DataCell(Text(mov.reason, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                                      DataCell(Text(mov.performedBy, style: const TextStyle(fontSize: 12))),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

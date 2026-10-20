@@ -206,77 +206,85 @@ class _AdminAssetsScreenState extends ConsumerState<AdminAssetsScreen> {
 
         // Tabla de Activos
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border),
           ),
           clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
-              dataRowMinHeight: 50,
-              dataRowMaxHeight: 54,
-              columns: const [
-                DataColumn(label: Text('CÓDIGO')),
-                DataColumn(label: Text('MÁQUINA / EQUIPO')),
-                DataColumn(label: Text('UBICACIÓN EN PLANTA')),
-                DataColumn(label: Text('CRITICIDAD')),
-                DataColumn(label: Text('ESTADO')),
-                DataColumn(label: Text('ÚLTIMO MANT.')),
-              ],
-              rows: filtered.map((asset) {
-                final isOperative = asset.status == 'OPERATIVO';
-                final isHighCrit = asset.criticality == 'ALTA';
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(AppColors.surfaceLight),
+                    headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.3),
+                    dataRowMinHeight: 50,
+                    dataRowMaxHeight: 54,
+                    columns: const [
+                      DataColumn(label: Text('CÓDIGO')),
+                      DataColumn(label: Text('MÁQUINA / EQUIPO')),
+                      DataColumn(label: Text('UBICACIÓN EN PLANTA')),
+                      DataColumn(label: Text('CRITICIDAD')),
+                      DataColumn(label: Text('ESTADO')),
+                      DataColumn(label: Text('ÚLTIMO MANT.')),
+                    ],
+                    rows: filtered.map((asset) {
+                      final isOperative = asset.status == 'OPERATIVO';
+                      final isHighCrit = asset.criticality == 'ALTA';
 
-                return DataRow(
-                  cells: [
-                    DataCell(Text(asset.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                    DataCell(Text(asset.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
-                    DataCell(Text(asset.location, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isHighCrit ? AppColors.dangerContainer : AppColors.surfaceSecondary,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isHighCrit ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
-                        ),
-                        child: Text(
-                          asset.criticality,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isHighCrit ? AppColors.danger : AppColors.textSecondary,
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(asset.code, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                          DataCell(Text(asset.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
+                          DataCell(Text(asset.location, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isHighCrit ? AppColors.dangerContainer : AppColors.surfaceSecondary,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: isHighCrit ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
+                              ),
+                              child: Text(
+                                asset.criticality,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isHighCrit ? AppColors.danger : AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isOperative ? AppColors.successContainer : AppColors.warningContainer,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isOperative ? AppColors.success.withValues(alpha: 0.3) : AppColors.warning.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          asset.status,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isOperative ? AppColors.success : AppColors.warning,
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isOperative ? AppColors.successContainer : AppColors.warningContainer,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: isOperative ? AppColors.success.withValues(alpha: 0.3) : AppColors.warning.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                asset.status,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOperative ? AppColors.success : AppColors.warning,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                    DataCell(Text(asset.lastMaintenance, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
-                  ],
-                );
-              }).toList(),
-            ),
+                          DataCell(Text(asset.lastMaintenance, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
