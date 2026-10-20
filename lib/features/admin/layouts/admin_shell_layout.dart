@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/app_providers.dart';
+import '../../../core/services/file_download_service.dart';
 import '../../common/connectivity_badge.dart';
 import '../screens/admin_assets_screen.dart';
 import '../screens/admin_dashboard_screen.dart';
@@ -40,6 +41,108 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
         ),
       );
     }
+  }
+
+  void _showDownloadApkDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: const [
+            Icon(Icons.android, color: AppColors.success, size: 26),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Instalador Android (APK) & Operación Remota',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      '📱 1. Instalar la App en el celular del Operario',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      '• Descargá el archivo CauquenCMMS.apk con el botón de abajo y enviaselo por WhatsApp, o abrí este portal desde el celular y descargalo directo.\n'
+                      '• Al abrir el APK en Android, aceptá "Instalar de esta fuente".',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      '📶 2. Uso fuera de casa (Con Datos Móviles o Sin Señal)',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      '• SIN DATOS (Offline): La app guarda todas las etapas, mediciones, fotos y firmas en la memoria interna del teléfono (Cola Offline-First).\n'
+                      '• CON DATOS (4G/5G o Wi-Fi): El celular sincroniza automáticamente con la base de datos en la nube (Supabase), y vos desde este Panel Web ves las órdenes actualizadas y descargás el Informe PDF Oficial.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  FileDownloadService.downloadUrl('CauquenCMMS.apk', 'CauquenCMMS.apk');
+                  Navigator.pop(ctx);
+                },
+                icon: const Icon(Icons.download_rounded, size: 20),
+                label: const Text(
+                  'DESCARGAR CauquenCMMS.apk AHORA',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
   }
 
   final List<String> _tabTitles = [
@@ -384,6 +487,20 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                       ),
                       Row(
                         children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _showDownloadApkDialog(context),
+                            icon: const Icon(Icons.android, size: 16, color: AppColors.success),
+                            label: const Text(
+                              'Descargar APK Móvil',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.border),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           OutlinedButton.icon(
                             onPressed: _isSyncingCloud ? null : _handleCloudSync,
                             icon: _isSyncingCloud

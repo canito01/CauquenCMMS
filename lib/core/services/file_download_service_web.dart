@@ -17,3 +17,12 @@ Future<void> downloadFileImpl(Uint8List bytes, String filename) async {
   web.URL.revokeObjectURL(url);
 }
 
+void downloadUrlImpl(String url, String filename) {
+  final anchor = web.HTMLAnchorElement()
+    ..href = url
+    ..download = filename;
+  web.document.body?.append(anchor);
+  anchor.click();
+  anchor.remove();
+}
+

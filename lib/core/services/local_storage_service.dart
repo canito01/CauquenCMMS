@@ -33,9 +33,17 @@ class LocalStorageService {
   }
 
   Future<void> _seedInitialDataIfNeeded() async {
+    final initialOrders = MockDataService.getInitialWorkOrders();
     if (!_prefs.containsKey(_keyWorkOrders)) {
-      final initialOrders = MockDataService.getInitialWorkOrders();
       await saveWorkOrders(initialOrders);
+    } else {
+      // Asegurar que la Tarea Demo Completa ('wo-showcase-2026') esté presente incluso si ya había datos guardados
+      final existing = getWorkOrders();
+      final showcaseOrder = initialOrders.where((o) => o.id == 'wo-showcase-2026').firstOrNull;
+      if (showcaseOrder != null && !existing.any((o) => o.id == 'wo-showcase-2026')) {
+        existing.insert(0, showcaseOrder);
+        await saveWorkOrders(existing);
+      }
     }
     if (!_prefs.containsKey(_keyAssets)) {
       final initialAssets = MockDataService.getAssets();
@@ -74,9 +82,21 @@ class LocalStorageService {
       ];
       await saveCrews(initialCrews);
     }
+    final defaultTemplates = TaskTemplateModel.getDefaultTemplates();
     if (!_prefs.containsKey(_keyTaskTemplates)) {
-      final initialTemplates = TaskTemplateModel.getDefaultTemplates();
-      await saveTaskTemplates(initialTemplates);
+      await saveTaskTemplates(defaultTemplates);
+    } else {
+      final existingTemplates = getTaskTemplates();
+      final showcaseTpl = defaultTemplates.where((t) => t.id == 'tpl-maintainx-multistage').firstOrNull;
+      if (showcaseTpl != null) {
+        final idx = existingTemplates.indexWhere((t) => t.id == 'tpl-maintainx-multistage');
+        if (idx >= 0) {
+          existingTemplates[idx] = showcaseTpl;
+        } else {
+          existingTemplates.insert(0, showcaseTpl);
+        }
+        await saveTaskTemplates(existingTemplates);
+      }
     }
   }
 

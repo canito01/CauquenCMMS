@@ -7,5 +7,9 @@ class FileDownloadService {
   static Future<void> downloadPdf(Uint8List bytes, String filename) async {
     await downloadFileImpl(bytes, filename);
   }
+
+  static void downloadUrl(String url, String filename) {
+    downloadUrlImpl(url, filename);
+  }
 }
 
