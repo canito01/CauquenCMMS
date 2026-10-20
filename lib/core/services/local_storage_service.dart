@@ -5,6 +5,7 @@ import '../models/crew_model.dart';
 import '../models/spare_part_model.dart';
 import '../models/stock_movement_model.dart';
 import '../models/sync_item_model.dart';
+import '../models/task_template_model.dart';
 import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 import 'mock_data_service.dart';
@@ -18,6 +19,7 @@ class LocalStorageService {
   static const String _keyUsers = 'maxi_users_v1';
   static const String _keyCrews = 'maxi_crews_v1';
   static const String _keyStockMovements = 'maxi_stock_movements_v1';
+  static const String _keyTaskTemplates = 'maxi_task_templates_v1';
 
   final SharedPreferences _prefs;
 
@@ -71,6 +73,10 @@ class LocalStorageService {
         ),
       ];
       await saveCrews(initialCrews);
+    }
+    if (!_prefs.containsKey(_keyTaskTemplates)) {
+      final initialTemplates = TaskTemplateModel.getDefaultTemplates();
+      await saveTaskTemplates(initialTemplates);
     }
   }
 
@@ -252,5 +258,22 @@ class LocalStorageService {
     final raw = jsonEncode(list.map((e) => e.toMap()).toList());
     await _prefs.setString(_keyStockMovements, raw);
   }
-}
 
+  // --- Plantillas y Protocolos Técnicos Maestros ---
+  List<TaskTemplateModel> getTaskTemplates() {
+    final raw = _prefs.getString(_keyTaskTemplates);
+    if (raw == null) return TaskTemplateModel.getDefaultTemplates();
+    try {
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      final list = decoded.map((e) => TaskTemplateModel.fromMap(e as Map<String, dynamic>)).toList();
+      return list.isNotEmpty ? list : TaskTemplateModel.getDefaultTemplates();
+    } catch (_) {
+      return TaskTemplateModel.getDefaultTemplates();
+    }
+  }
+
+  Future<void> saveTaskTemplates(List<TaskTemplateModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toMap()).toList());
+    await _prefs.setString(_keyTaskTemplates, raw);
+  }
+}

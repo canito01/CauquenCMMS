@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
+import '../widgets/report_breakdown_sheet.dart';
 import '../widgets/work_order_card.dart';
 
 class WorkOrdersListScreen extends ConsumerStatefulWidget {
@@ -48,6 +49,13 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
             child: ConnectivityBadge(),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => ReportBreakdownSheet.show(context),
+        backgroundColor: AppColors.danger,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_alert_rounded, size: 18),
+        label: const Text('Reportar Avería', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
       ),
       body: Column(
         children: [
@@ -139,18 +147,24 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredOrders.length,
-                    itemBuilder: (context, index) {
-                      final order = filteredOrders[index];
-                      return WorkOrderCard(
-                        order: order,
-                        onTap: () {
-                          context.push('/order/${order.id}');
-                        },
-                      );
+                : RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () async {
+                      await ref.read(syncQueueProvider.notifier).syncAllBidirectional();
                     },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                      itemCount: filteredOrders.length,
+                      itemBuilder: (context, index) {
+                        final order = filteredOrders[index];
+                        return WorkOrderCard(
+                          order: order,
+                          onTap: () {
+                            context.push('/order/${order.id}');
+                          },
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

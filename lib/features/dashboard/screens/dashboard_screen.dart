@@ -6,6 +6,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
+import '../../work_orders/widgets/report_breakdown_sheet.dart';
 import '../../work_orders/widgets/work_order_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -77,6 +78,26 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
           ],
+          IconButton(
+            tooltip: 'Sincronizar órdenes y plantillas con la central',
+            icon: const Icon(Icons.cloud_sync_outlined, color: Colors.white),
+            onPressed: () async {
+              final ok = await ref.read(syncQueueProvider.notifier).syncAllBidirectional();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      ok
+                          ? '✓ Órdenes y plantillas sincronizadas con la central.'
+                          : 'Modo Offline activo. Trabajando con datos locales.',
+                    ),
+                    backgroundColor: ok ? AppColors.success : AppColors.warning,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
           const Padding(
             padding: EdgeInsets.only(right: 12),
             child: ConnectivityBadge(),
@@ -87,7 +108,7 @@ class DashboardScreen extends ConsumerWidget {
         color: AppColors.primary,
         onRefresh: () async {
           if (isOnline) {
-            await ref.read(syncQueueProvider.notifier).processSyncQueue();
+            await ref.read(syncQueueProvider.notifier).syncAllBidirectional();
           }
         },
         child: ListView(
@@ -277,6 +298,27 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+
+            // Botón Rápido para que el Operario Reporte una Avería o Solicitud en Planta (Estilo MaintainX)
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => ReportBreakdownSheet.show(context),
+                icon: const Icon(Icons.add_alert_rounded, size: 20),
+                label: const Text(
+                  '+ REPORTAR AVERÍA O SOLICITUD EN PLANTA',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ),
             const SizedBox(height: 22),
 

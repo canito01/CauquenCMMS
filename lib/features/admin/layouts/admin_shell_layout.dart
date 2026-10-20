@@ -20,6 +20,27 @@ class AdminShellLayout extends ConsumerStatefulWidget {
 
 class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
   int _selectedIndex = 0;
+  bool _isSyncingCloud = false;
+
+  Future<void> _handleCloudSync() async {
+    if (_isSyncingCloud) return;
+    setState(() => _isSyncingCloud = true);
+    final ok = await ref.read(syncQueueProvider.notifier).syncAllBidirectional();
+    if (mounted) {
+      setState(() => _isSyncingCloud = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? '✓ Sincronización bidireccional con Supabase completada.'
+                : 'No se pudo conectar con la nube. Operando con datos locales.',
+          ),
+          backgroundColor: ok ? AppColors.success : AppColors.warning,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   final List<String> _tabTitles = [
     'Panel General & Reportes',
@@ -273,8 +294,19 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
             _tabTitles[_selectedIndex],
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
           ),
-          actions: const [
-            Padding(
+          actions: [
+            IconButton(
+              tooltip: 'Sincronizar datos con celulares de planta (Supabase)',
+              icon: _isSyncingCloud
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.cloud_sync_outlined, color: Colors.white),
+              onPressed: _handleCloudSync,
+            ),
+            const Padding(
               padding: EdgeInsets.only(right: 12),
               child: ConnectivityBadge(),
             ),
@@ -351,8 +383,28 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                         ],
                       ),
                       Row(
-                        children: const [
-                          ConnectivityBadge(),
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _isSyncingCloud ? null : _handleCloudSync,
+                            icon: _isSyncingCloud
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                  )
+                                : const Icon(Icons.cloud_sync_outlined, size: 16, color: AppColors.primary),
+                            label: Text(
+                              _isSyncingCloud ? 'Sincronizando...' : 'Sincronizar Nube',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.border),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const ConnectivityBadge(),
                         ],
                       ),
                     ],

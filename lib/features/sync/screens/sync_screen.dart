@@ -122,22 +122,24 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Acceso al Portal Administrativo Web
-          Card(
-            color: AppColors.primary.withValues(alpha: 0.12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.primary),
+          // Acceso al Portal Administrativo Web (Solo para Administradores y Supervisores)
+          if (isSupervisor || user?.role == UserRole.admin) ...[
+            Card(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.primary),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.admin_panel_settings, color: AppColors.primary, size: 30),
+                title: const Text('Portal Administrativo Web', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Gestione órdenes, inventarios, KPIs y catálogo de activos'),
+                trailing: const Icon(Icons.arrow_forward, color: AppColors.primary),
+                onTap: () => context.go('/admin'),
+              ),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.admin_panel_settings, color: AppColors.primary, size: 30),
-              title: const Text('Portal Administrativo Web', style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('Gestione órdenes, inventarios, KPIs y catálogo de activos'),
-              trailing: const Icon(Icons.arrow_forward, color: AppColors.primary),
-              onTap: () => context.go('/admin'),
-            ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 14),
+          ],
 
           // Tarjeta de Estado de Base de Datos Cloud (Supabase)
           Container(
@@ -272,16 +274,16 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
-                      onPressed: (!isOnline || syncQueue.isEmpty || _isSyncing)
+                      onPressed: (!isOnline || _isSyncing)
                           ? null
                           : () async {
                               setState(() => _isSyncing = true);
-                              await ref.read(syncQueueProvider.notifier).processSyncQueue();
+                              await ref.read(syncQueueProvider.notifier).syncAllBidirectional();
                               setState(() => _isSyncing = false);
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('¡Datos y firmas sincronizados con éxito con el servidor!'),
+                                    content: Text('✓ Sincronización bidireccional completada (órdenes, plantillas y firmas actualizadas).'),
                                     backgroundColor: AppColors.success,
                                   ),
                                 );
@@ -294,7 +296,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.sync, size: 16),
-                      label: Text(_isSyncing ? 'Enviando...' : 'Sincronizar Ya'),
+                      label: Text(_isSyncing ? 'Sincronizando...' : 'Sincronizar Ya'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         minimumSize: const Size(130, 38),

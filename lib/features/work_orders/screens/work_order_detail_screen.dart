@@ -5,7 +5,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/models/checklist_item_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
-import '../../../core/services/pdf_report_service.dart';
 import '../../common/connectivity_badge.dart';
 
 class WorkOrderDetailScreen extends ConsumerWidget {
@@ -34,43 +33,8 @@ class WorkOrderDetailScreen extends ConsumerWidget {
             order.orderNumber,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-              tooltip: 'Descargar Informe PDF Oficial',
-              onPressed: () async {
-                try {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                          const SizedBox(width: 10),
-                          Text('Generando informe para ${order.orderNumber}...'),
-                        ],
-                      ),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                  final filename = await PdfReportService.downloadOrPrintReport(order);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('✓ Archivo "$filename" descargado con éxito.'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: AppColors.danger),
-                    );
-                  }
-                }
-              },
-            ),
-            const Padding(
+          actions: const [
+            Padding(
               padding: EdgeInsets.only(right: 16),
               child: ConnectivityBadge(),
             ),
