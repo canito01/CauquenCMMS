@@ -34,14 +34,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
 
     if (success && mounted) {
-      context.go('/');
+      final user = ref.read(authProvider).user;
+      if (user?.role == UserRole.supervisor || user?.role == UserRole.admin) {
+        context.go('/admin');
+      } else {
+        context.go('/');
+      }
     }
   }
 
   Future<void> _handleQuickLogin(UserModel user) async {
     await ref.read(authProvider.notifier).quickLoginAs(user);
     if (mounted) {
-      context.go('/');
+      if (user.role == UserRole.supervisor || user.role == UserRole.admin) {
+        context.go('/admin');
+      } else {
+        context.go('/');
+      }
     }
   }
 
@@ -50,80 +59,119 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
     final isOnline = ref.watch(isOnlineStateProvider);
     final mockUsers = MockDataService.getMockUsers();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isMobile ? AppColors.surfaceSecondary : AppColors.background,
+      appBar: isMobile
+          ? AppBar(
+              backgroundColor: AppColors.primary,
+              elevation: 0,
+              title: Row(
+                children: const [
+                  Text('🦅', style: TextStyle(fontSize: 20)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Cauquén CMMS',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+                  ),
+                ],
+              ),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: ConnectivityBadge(),
+                ),
+              ],
+            )
+          : null,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 14 : 24,
+              vertical: isMobile ? 16 : 28,
+            ),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
+              constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 460),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Badge Superior de Conectividad
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: const ConnectivityBadge(),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Logo y Marca Industrial
-                  Center(
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primary, width: 2),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '🦅',
-                          style: TextStyle(fontSize: 40),
-                        ),
-                      ),
+                  if (!isMobile) ...[
+                    const Align(
+                      alignment: Alignment.topRight,
+                      child: ConnectivityBadge(),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                  ],
 
-                  const Text(
-                    'Cauquén CMMS',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Gestión de Mantenimiento Industrial • Planta',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Tarjeta del Formulario
+                  // Logo y Marca Industrial (Paleta Cauquén / MaintainX)
                   Container(
-                    padding: const EdgeInsets.all(22),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.primary, width: 2),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              '🦅',
+                              style: TextStyle(fontSize: 34),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Cauquén CMMS',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Gestión de Mantenimiento Industrial • Planta',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Tarjeta del Formulario (Ocupa 100% del ancho en móvil)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.border),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -131,33 +179,139 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const Text(
-                          'ACCESO DE CUADRILLA',
+                          'ACCESO AL SISTEMA',
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.9,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
+
+                        // Selector de Perfil / Destino (Web vs Móvil)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _idController.text = 'SUP-1020';
+                                    _passwordController.text = 'password123';
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: _idController.text.contains('SUP')
+                                        ? AppColors.primaryContainer
+                                        : AppColors.surfaceSecondary,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: _idController.text.contains('SUP')
+                                          ? AppColors.primary
+                                          : AppColors.border,
+                                      width: _idController.text.contains('SUP') ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: const [
+                                      Icon(Icons.computer, size: 20, color: AppColors.primary),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'PORTAL WEB',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Supervisor / Admin',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _idController.text = 'TEC-4482';
+                                    _passwordController.text = 'password123';
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: !_idController.text.contains('SUP')
+                                        ? AppColors.warningContainer
+                                        : AppColors.surfaceSecondary,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: !_idController.text.contains('SUP')
+                                          ? AppColors.warning
+                                          : AppColors.border,
+                                      width: !_idController.text.contains('SUP') ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: const [
+                                      Icon(Icons.phone_android, size: 20, color: AppColors.warning),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'APP MÓVIL',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Operario Técnico',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.warning,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
 
                         // Campo: Legajo / Correo
                         TextField(
                           controller: _idController,
                           textInputAction: TextInputAction.next,
+                          onChanged: (_) => setState(() {}),
+                          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                           decoration: InputDecoration(
                             labelText: 'Legajo o Correo de Planta',
-                            hintText: 'Ej: TEC-4482 o correo@planta.com',
+                            hintText: 'Ej: SUP-1020 o TEC-4482',
                             prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary),
                             filled: true,
-                            fillColor: AppColors.surfaceElevated,
+                            fillColor: AppColors.surfaceSecondary,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(color: AppColors.border),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
 
                         // Campo: Contraseña
                         TextField(
@@ -165,6 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _handleLogin(),
+                          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                           decoration: InputDecoration(
                             labelText: 'Contraseña de Acceso',
                             hintText: '••••••••',
@@ -181,14 +336,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               },
                             ),
                             filled: true,
-                            fillColor: AppColors.surfaceElevated,
+                            fillColor: AppColors.surfaceSecondary,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(color: AppColors.border),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
 
                         // Fila Recordar Sesión
                         Row(
@@ -204,7 +359,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const Expanded(
                               child: Text(
-                                'Mantener sesión activa en este móvil',
+                                'Mantener sesión activa en este dispositivo',
                                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               ),
                             ),
@@ -213,11 +368,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                         // Mensaje de Error
                         if (authState.errorMessage != null) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: AppColors.danger.withValues(alpha: 0.15),
+                              color: AppColors.dangerContainer,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: AppColors.danger),
                             ),
@@ -228,42 +383,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 Expanded(
                                   child: Text(
                                     authState.errorMessage!,
-                                    style: const TextStyle(color: AppColors.danger, fontSize: 12),
+                                    style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ],
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
 
-                        // Botón Ingresar
-                        ElevatedButton.icon(
-                          onPressed: authState.isLoading ? null : _handleLogin,
-                          icon: authState.isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.login),
-                          label: Text(
-                            authState.isLoading ? 'AUTENTICANDO...' : 'INGRESAR A PLANTA',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                        // Botón Ingresar (100% Ancho)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: authState.isLoading ? null : _handleLogin,
+                            icon: authState.isLoading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.login),
+                            label: Text(
+                              authState.isLoading ? 'AUTENTICANDO...' : 'INGRESAR A PLANTA',
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.4),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
                   // Accesos Rápidos para Prueba de Operarios
                   const Text(
@@ -271,86 +429,118 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.8,
-                      color: AppColors.textMuted,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 10),
 
-                  ...mockUsers.map((user) {
-                    final isTech = user.role == UserRole.technician;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: InkWell(
-                        onTap: () => _handleQuickLogin(user),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isTech
-                                  ? AppColors.primary.withValues(alpha: 0.3)
-                                  : AppColors.warning.withValues(alpha: 0.4),
+                  ...(() {
+                    final sorted = List<UserModel>.from(mockUsers)
+                      ..sort((a, b) => b.role.index.compareTo(a.role.index)); // Supervisor primero
+                    return sorted.map((user) {
+                      final isTech = user.role == UserRole.technician;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          onTap: () => _handleQuickLogin(user),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isTech
+                                    ? AppColors.warning.withValues(alpha: 0.45)
+                                    : AppColors.primary.withValues(alpha: 0.5),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 19,
+                                  backgroundColor: isTech
+                                      ? AppColors.warningContainer
+                                      : AppColors.primaryContainer,
+                                  child: Icon(
+                                    isTech ? Icons.phone_android : Icons.computer,
+                                    size: 19,
+                                    color: isTech ? AppColors.warning : AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              user.name,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: isTech
+                                                  ? AppColors.warningContainer
+                                                  : AppColors.primaryContainer,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              isTech ? '📱 MÓVIL' : '🖥️ ADMIN',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: isTech ? AppColors.warning : AppColors.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${user.badge} • ${user.roleDisplayName}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                  color: AppColors.textMuted,
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: isTech
-                                    ? AppColors.primary.withValues(alpha: 0.2)
-                                    : AppColors.warning.withValues(alpha: 0.2),
-                                child: Icon(
-                                  isTech ? Icons.engineering : Icons.verified_user,
-                                  size: 20,
-                                  color: isTech ? AppColors.primary : AppColors.warning,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      user.name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${user.badge} • ${user.roleDisplayName}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: AppColors.textMuted,
-                              ),
-                            ],
-                          ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    });
+                  })(),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Text(
                     isOnline
                         ? '🟢 Conexión directa a PostgreSQL y Storage de Supabase'
                         : '🟠 Modo Autónomo Offline (Planta sin cobertura)',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -361,4 +551,3 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-

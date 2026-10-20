@@ -17,6 +17,8 @@ class SparePartModel {
     this.consumedQuantity = 0,
   });
 
+  bool get isLowStock => stockAvailable <= 5;
+
   SparePartModel copyWith({
     String? id,
     String? code,
@@ -60,5 +62,13 @@ class SparePartModel {
       consumedQuantity: (map['consumedQuantity'] as num?)?.toInt() ?? 0,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SparePartModel && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 

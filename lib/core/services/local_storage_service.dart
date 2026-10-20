@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset_model.dart';
+import '../models/crew_model.dart';
 import '../models/spare_part_model.dart';
+import '../models/stock_movement_model.dart';
 import '../models/sync_item_model.dart';
+import '../models/task_template_model.dart';
 import '../models/user_model.dart';
 import '../models/work_order_model.dart';
 import 'mock_data_service.dart';
@@ -13,6 +16,10 @@ class LocalStorageService {
   static const String _keySpareParts = 'maxi_spare_parts_v1';
   static const String _keySyncQueue = 'maxi_sync_queue_v1';
   static const String _keyCurrentUser = 'cauquen_current_user_v1';
+  static const String _keyUsers = 'maxi_users_v1';
+  static const String _keyCrews = 'maxi_crews_v1';
+  static const String _keyStockMovements = 'maxi_stock_movements_v1';
+  static const String _keyTaskTemplates = 'maxi_task_templates_v1';
 
   final SharedPreferences _prefs;
 
@@ -26,9 +33,17 @@ class LocalStorageService {
   }
 
   Future<void> _seedInitialDataIfNeeded() async {
+    final initialOrders = MockDataService.getInitialWorkOrders();
     if (!_prefs.containsKey(_keyWorkOrders)) {
-      final initialOrders = MockDataService.getInitialWorkOrders();
       await saveWorkOrders(initialOrders);
+    } else {
+      // Asegurar que la Tarea Demo Completa ('wo-showcase-2026') esté presente incluso si ya había datos guardados
+      final existing = getWorkOrders();
+      final showcaseOrder = initialOrders.where((o) => o.id == 'wo-showcase-2026').firstOrNull;
+      if (showcaseOrder != null && !existing.any((o) => o.id == 'wo-showcase-2026')) {
+        existing.insert(0, showcaseOrder);
+        await saveWorkOrders(existing);
+      }
     }
     if (!_prefs.containsKey(_keyAssets)) {
       final initialAssets = MockDataService.getAssets();
@@ -37,6 +52,51 @@ class LocalStorageService {
     if (!_prefs.containsKey(_keySpareParts)) {
       final initialParts = MockDataService.getSpareParts();
       await saveSpareParts(initialParts);
+    }
+    if (!_prefs.containsKey(_keyUsers)) {
+      final initialUsers = MockDataService.getMockUsers();
+      await saveUsers(initialUsers);
+    }
+    if (!_prefs.containsKey(_keyCrews)) {
+      final initialCrews = [
+        const CrewModel(
+          id: 'crw-1',
+          name: 'Cuadrilla Alfa - Mecánica & Neumática',
+          shift: 'Turno Mañana (06:00 - 14:00)',
+          specialty: 'Mantenimiento Mecánico, Bombas y Válvulas',
+          leaderName: 'Carlos Méndez',
+          leaderBadge: 'SUP-1020',
+          memberNames: ['Maximiliano Rossi', 'Lucas Varela'],
+          notes: 'Asignada a Naves A y B de extrusión y calderas',
+        ),
+        const CrewModel(
+          id: 'crw-2',
+          name: 'Cuadrilla Beta - Electricidad & PLC',
+          shift: 'Turno Tarde (14:00 - 22:00)',
+          specialty: 'Tableros Eléctricos, Variadores y Automatización',
+          leaderName: 'Carlos Méndez',
+          leaderBadge: 'SUP-1020',
+          memberNames: ['Lucas Varela'],
+          notes: 'Mantenimiento de subestaciones y controladores lógicos',
+        ),
+      ];
+      await saveCrews(initialCrews);
+    }
+    final defaultTemplates = TaskTemplateModel.getDefaultTemplates();
+    if (!_prefs.containsKey(_keyTaskTemplates)) {
+      await saveTaskTemplates(defaultTemplates);
+    } else {
+      final existingTemplates = getTaskTemplates();
+      final showcaseTpl = defaultTemplates.where((t) => t.id == 'tpl-maintainx-multistage').firstOrNull;
+      if (showcaseTpl != null) {
+        final idx = existingTemplates.indexWhere((t) => t.id == 'tpl-maintainx-multistage');
+        if (idx >= 0) {
+          existingTemplates[idx] = showcaseTpl;
+        } else {
+          existingTemplates.insert(0, showcaseTpl);
+        }
+        await saveTaskTemplates(existingTemplates);
+      }
     }
   }
 
@@ -167,5 +227,73 @@ class LocalStorageService {
   Future<void> clearCurrentUser() async {
     await _prefs.remove(_keyCurrentUser);
   }
-}
 
+  // --- Personal / Usuarios ---
+  List<UserModel> getUsers() {
+    final raw = _prefs.getString(_keyUsers);
+    if (raw == null) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded.map((e) => UserModel.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveUsers(List<UserModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toMap()).toList());
+    await _prefs.setString(_keyUsers, raw);
+  }
+
+  // --- Cuadrillas de Planta ---
+  List<CrewModel> getCrews() {
+    final raw = _prefs.getString(_keyCrews);
+    if (raw == null) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded.map((e) => CrewModel.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveCrews(List<CrewModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toMap()).toList());
+    await _prefs.setString(_keyCrews, raw);
+  }
+
+  // --- Movimientos Manuales de Stock ---
+  List<StockMovementModel> getStockMovements() {
+    final raw = _prefs.getString(_keyStockMovements);
+    if (raw == null) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded.map((e) => StockMovementModel.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveStockMovements(List<StockMovementModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toMap()).toList());
+    await _prefs.setString(_keyStockMovements, raw);
+  }
+
+  // --- Plantillas y Protocolos Técnicos Maestros ---
+  List<TaskTemplateModel> getTaskTemplates() {
+    final raw = _prefs.getString(_keyTaskTemplates);
+    if (raw == null) return TaskTemplateModel.getDefaultTemplates();
+    try {
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      final list = decoded.map((e) => TaskTemplateModel.fromMap(e as Map<String, dynamic>)).toList();
+      return list.isNotEmpty ? list : TaskTemplateModel.getDefaultTemplates();
+    } catch (_) {
+      return TaskTemplateModel.getDefaultTemplates();
+    }
+  }
+
+  Future<void> saveTaskTemplates(List<TaskTemplateModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toMap()).toList());
+    await _prefs.setString(_keyTaskTemplates, raw);
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/admin/layouts/admin_shell_layout.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/inventory/screens/inventory_screen.dart';
@@ -8,6 +9,7 @@ import '../../features/sync/screens/sync_screen.dart';
 import '../../features/work_orders/screens/work_order_detail_screen.dart';
 import '../../features/work_orders/screens/work_order_execution_screen.dart';
 import '../../features/work_orders/screens/work_orders_list_screen.dart';
+import '../models/user_model.dart';
 import '../services/app_providers.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -18,14 +20,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: authState.isAuthenticated ? '/' : '/login',
+    initialLocation: authState.isAuthenticated
+        ? (authState.user?.role == UserRole.supervisor || authState.user?.role == UserRole.admin ? '/admin' : '/')
+        : '/login',
     redirect: (context, state) {
       final isLoggingIn = state.matchedLocation == '/login';
       if (!authState.isAuthenticated) {
         return isLoggingIn ? null : '/login';
       }
       if (isLoggingIn) {
-        return '/';
+        return authState.user?.role == UserRole.supervisor || authState.user?.role == UserRole.admin
+            ? '/admin'
+            : '/';
+      }
+      // Control estricto: solo administradores y supervisores pueden ingresar a /admin
+      if (state.matchedLocation.startsWith('/admin')) {
+        final role = authState.user?.role;
+        if (role != UserRole.supervisor && role != UserRole.admin) {
+          return '/';
+        }
       }
       return null;
     },
@@ -34,6 +47,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/admin',
+        builder: (context, state) => const AdminShellLayout(),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
