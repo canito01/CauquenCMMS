@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/models/work_order_model.dart';
 import '../../../core/services/app_providers.dart';
 import '../../common/connectivity_badge.dart';
@@ -22,7 +23,7 @@ class DashboardScreen extends ConsumerWidget {
     final pausedOrders = workOrders.where((o) => o.status == WorkOrderStatus.pausada).toList();
     final completedOrders = workOrders.where((o) => o.status == WorkOrderStatus.finalizada).toList();
     final preventiveOrders = workOrders.where((o) => o.type == WorkOrderType.preventivo).toList();
-    
+
     // Averías críticas / Breakdowns (Correctivas o de Prioridad Urgente)
     final breakdownOrders = workOrders.where(
       (o) => o.priority == WorkOrderPriority.urgente || o.type == WorkOrderType.correctivo,
@@ -35,45 +36,49 @@ class DashboardScreen extends ConsumerWidget {
 
     final authState = ref.watch(authProvider);
     final currentUser = authState.user;
+    final canAccessAdmin = currentUser?.role == UserRole.supervisor || currentUser?.role == UserRole.admin;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
+        titleSpacing: 16,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               '🦅 Cauquén CMMS',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
               overflow: TextOverflow.ellipsis,
             ),
             Text(
               '${currentUser?.name ?? "Operario de Planta"} • ${currentUser?.badge ?? "TEC-0000"}',
-              style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.85), fontWeight: FontWeight.normal),
+              style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.88), fontWeight: FontWeight.w500),
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: OutlinedButton.icon(
-              onPressed: () => context.go('/admin'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          if (canAccessAdmin) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: OutlinedButton.icon(
+                onPressed: () => context.go('/admin'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.65)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.dashboard_customize_outlined, size: 14, color: Colors.white),
+                label: const Text('ADMIN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
-              icon: const Icon(Icons.computer, size: 15, color: Colors.white),
-              label: const Text('WEB ADMIN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           const Padding(
-            padding: EdgeInsets.only(right: 16),
+            padding: EdgeInsets.only(right: 12),
             child: ConnectivityBadge(),
           ),
         ],
@@ -86,11 +91,12 @@ class DashboardScreen extends ConsumerWidget {
           }
         },
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
           children: [
-            // Alerta de sincronización offline/online
+            // Alerta de sincronización offline/online (100% ancho)
             if (syncQueue.isNotEmpty) ...[
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
@@ -154,15 +160,22 @@ class DashboardScreen extends ConsumerWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                Text(
-                  '$totalOrders OTs activas',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$totalOrders OTs activas',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // CUADRÍCULA DE 2 COLUMNAS CON BOTONES TÁCTILES GRANDES (DISEÑO INDUSTRIAL CAUQUÉN)
+            // CUADRÍCULA DE 2 COLUMNAS CON BOTONES TÁCTILES GRANDES (OCUPA 100% DEL ANCHO)
             Row(
               children: [
                 // 1. AVERÍAS / BREAKDOWNS (Rojo bermellón #D32F2F crítico)
@@ -180,8 +193,8 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.go('/orders'),
                   ),
                 ),
-                const SizedBox(width: 12),
-                // 2. EN PROCESO (Marrón tierra Cauquén #5C4033)
+                const SizedBox(width: 10),
+                // 2. EN PROCESO
                 Expanded(
                   child: _buildTactileMetricButton(
                     context: context,
@@ -197,7 +210,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 // 3. PREVENTIVO
@@ -214,7 +227,7 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.go('/orders'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // 4. SOLICITUDES / PENDIENTES
                 Expanded(
                   child: _buildTactileMetricButton(
@@ -231,7 +244,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 // 5. FINALIZADAS
@@ -248,7 +261,7 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.go('/orders'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // 6. TOTAL ASIGNADAS
                 Expanded(
                   child: _buildTactileMetricButton(
@@ -265,9 +278,9 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
 
-            // Tarea Activa en Turno (Acción Rápida)
+            // Tarea Activa en Turno (Acción Rápida 100% Ancho)
             if (activeOrder != null) ...[
               const Text(
                 'TAREA ACTIVA EN EJECUCIÓN',
@@ -280,6 +293,7 @@ class DashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -299,14 +313,21 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          activeOrder.orderNumber,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            activeOrder.orderNumber,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary),
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -320,7 +341,7 @@ class DashboardScreen extends ConsumerWidget {
                             activeOrder.status == WorkOrderStatus.enProceso ? 'EN CURSO' : 'PAUSADA',
                             style: TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
                               color: activeOrder.status == WorkOrderStatus.enProceso
                                   ? AppColors.warning
                                   : AppColors.paused,
@@ -329,19 +350,19 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       activeOrder.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimary),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.precision_manufacturing_outlined, size: 14, color: AppColors.textSecondary),
+                        const Icon(Icons.precision_manufacturing_outlined, size: 15, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Activo: ${activeOrder.asset.code} • ${activeOrder.asset.name} (${activeOrder.asset.location})',
+                            '${activeOrder.asset.code} • ${activeOrder.asset.name} (${activeOrder.asset.location})',
                             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -349,41 +370,69 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    // Barra de progreso MaintainX a ancho completo
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Avance del Protocolo (${activeOrder.resolvedStages.length} etapas)',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                        ),
+                        Text(
+                          '${activeOrder.completedTasksCount}/${activeOrder.totalTasksCount} pasos (${(activeOrder.progressPercentage * 100).toInt()}%)',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: activeOrder.progressPercentage,
+                        minHeight: 7,
+                        backgroundColor: AppColors.surfaceElevated,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      ),
+                    ),
                     if (activeOrder.pauseReason != null) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
                         'Motivo de pausa: ${activeOrder.pauseReason}',
                         style: const TextStyle(fontSize: 12, color: AppColors.paused, fontStyle: FontStyle.italic),
                       ),
                     ],
                     const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        context.push('/execution/${activeOrder.id}');
-                      },
-                      icon: Icon(
-                        activeOrder.status == WorkOrderStatus.enProceso ? Icons.play_arrow : Icons.replay,
-                        size: 20,
-                      ),
-                      label: Text(
-                        activeOrder.status == WorkOrderStatus.enProceso
-                            ? 'CONTINUAR LABOR (${activeOrder.completedTasksCount}/${activeOrder.totalTasksCount} PASOS)'
-                            : 'REANUDAR TAREA',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          context.push('/execution/${activeOrder.id}');
+                        },
+                        icon: Icon(
+                          activeOrder.status == WorkOrderStatus.enProceso ? Icons.play_arrow : Icons.replay,
+                          size: 20,
+                        ),
+                        label: Text(
+                          activeOrder.status == WorkOrderStatus.enProceso
+                              ? 'CONTINUAR LABOR (${activeOrder.completedTasksCount}/${activeOrder.totalTasksCount} PASOS)'
+                              : 'REANUDAR TAREA EN PLANTA',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
             ],
 
             // Lista de Órdenes Recientes
@@ -404,13 +453,13 @@ class DashboardScreen extends ConsumerWidget {
                     context.go('/orders');
                   },
                   style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-                  child: const Text('VER TODAS', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('VER TODAS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
-            ...workOrders.take(3).map((order) {
+            ...workOrders.take(4).map((order) {
               return WorkOrderCard(
                 order: order,
                 onTap: () {
@@ -443,8 +492,9 @@ class DashboardScreen extends ConsumerWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.all(16),
-          constraints: const BoxConstraints(minHeight: 125),
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          constraints: const BoxConstraints(minHeight: 118),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(14),
@@ -486,7 +536,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -80,6 +80,7 @@ class WorkOrderDetailScreen extends ConsumerWidget {
             child: Container(
               color: AppColors.surface,
               child: TabBar(
+                labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                 indicatorColor: AppColors.primary,
                 indicatorWeight: 3,
                 labelColor: AppColors.primary,
@@ -461,7 +462,11 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                         break;
                       case ChecklistItemType.photoRequired:
                         typeIcon = Icons.camera_alt;
-                        subtitle = item.photoUrl != null ? 'Foto adjuntada' : 'Foto obligatoria requerida';
+                        subtitle = item.allPhotos.isNotEmpty
+                            ? 'Fotos adjuntadas: ${item.allPhotos.length}/${item.minPhotos} requeridas'
+                            : (item.minPhotos > 1
+                                ? '${item.minPhotos} fotos obligatorias requeridas (máx ${item.maxPhotos})'
+                                : 'Foto obligatoria requerida');
                         break;
                       case ChecklistItemType.photoBeforeAfter:
                         typeIcon = Icons.compare;
@@ -478,6 +483,12 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                         subtitle = item.selectedOption != null
                             ? 'Selección: ${item.selectedOption}'
                             : 'Opciones: ${item.options.join(", ")}';
+                        break;
+                      case ChecklistItemType.multipleChoice:
+                        typeIcon = Icons.checklist_rtl;
+                        subtitle = item.selectedOptions.isNotEmpty
+                            ? 'Marcados (${item.selectedOptions.length}): ${item.selectedOptions.join(", ")}'
+                            : 'Sub-ítems: ${item.options.join(", ")}';
                         break;
                       case ChecklistItemType.booleanCheck:
                         typeIcon = Icons.done_all;
@@ -769,8 +780,9 @@ class WorkOrderDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildActionButton(BuildContext context, WidgetRef ref, WorkOrderModel order) {
+    Widget button;
     if (order.status == WorkOrderStatus.pendiente) {
-      return ElevatedButton.icon(
+      button = ElevatedButton.icon(
         onPressed: () async {
           await ref.read(workOrdersProvider.notifier).startWorkOrder(order.id);
           if (context.mounted) {
@@ -778,30 +790,32 @@ class WorkOrderDetailScreen extends ConsumerWidget {
           }
         },
         icon: const Icon(Icons.play_arrow, size: 20),
-        label: const Text('INICIAR ORDEN DE TRABAJO'),
+        label: const Text('INICIAR ORDEN DE TRABAJO', style: TextStyle(fontWeight: FontWeight.w800)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else if (order.status == WorkOrderStatus.enProceso) {
-      return ElevatedButton.icon(
+      button = ElevatedButton.icon(
         onPressed: () {
           context.push('/execution/${order.id}');
         },
         icon: const Icon(Icons.build_outlined, size: 20),
-        label: const Text('CONTINUAR EJECUCIÓN (TIMER ACTIVO)'),
+        label: const Text('CONTINUAR EJECUCIÓN (TIMER ACTIVO)', style: TextStyle(fontWeight: FontWeight.w800)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else if (order.status == WorkOrderStatus.pausada) {
-      return ElevatedButton.icon(
+      button = ElevatedButton.icon(
         onPressed: () async {
           await ref.read(workOrdersProvider.notifier).resumeWorkOrder(order.id);
           if (context.mounted) {
@@ -809,28 +823,31 @@ class WorkOrderDetailScreen extends ConsumerWidget {
           }
         },
         icon: const Icon(Icons.replay, size: 20),
-        label: const Text('REANUDAR TAREA'),
+        label: const Text('REANUDAR TAREA EN PLANTA', style: TextStyle(fontWeight: FontWeight.w800)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.paused,
           foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else {
-      return OutlinedButton.icon(
+      button = OutlinedButton.icon(
         onPressed: () {
           context.push('/execution/${order.id}');
         },
         icon: const Icon(Icons.assignment_turned_in, size: 18),
-        label: const Text('VER INFORME Y FIRMA DE CIERRE'),
+        label: const Text('VER INFORME Y FIRMA DE CIERRE', style: TextStyle(fontWeight: FontWeight.w800)),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary),
+          side: const BorderSide(color: AppColors.primary, width: 1.5),
+          minimumSize: const Size(double.infinity, 50),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
+    return SizedBox(width: double.infinity, child: button);
   }
 }

@@ -1,10 +1,11 @@
 enum ChecklistItemType {
   booleanCheck,          // Inspección Conforme / Sí-No / Verificación
   numericMeasurement,    // Medición con unidad, rango minAcceptable y maxAcceptable
-  photoRequired,         // Foto obligatoria (cámara/galería con preview)
+  photoRequired,         // Foto(s) obligatoria(s) (1 o múltiples fotos con cámara/galería)
   photoBeforeAfter,      // Foto Doble (Antes y Después de la tarea)
   textObservation,       // Entrada de texto / Notas obligatorias o libres
   singleChoice,          // Selección única entre opciones (ej: Conforme / Observado / No Aplica)
+  multipleChoice,        // Selección múltiple / Sub-ítems verificables (MaintainX Checkboxes)
 }
 
 class ChecklistItemModel {
@@ -19,15 +20,19 @@ class ChecklistItemModel {
   final double? maxAcceptable;
   final String? notes;
 
-  // Nuevas propiedades para soporte multietapa y MaintainX
+  // Propiedades para soporte multietapa y personalización MaintainX
   final String stageId;
   final String stageName;
   final bool isRequired;
   final String? photoUrl;
+  final List<String> photoUrls;
+  final int minPhotos; // Cantidad mínima de fotos requeridas en este paso (default 1)
+  final int maxPhotos; // Cantidad máxima de fotos permitidas en este paso (default 5)
   final String? photoBeforeUrl;
   final String? photoAfterUrl;
   final List<String> options;
   final String? selectedOption;
+  final List<String> selectedOptions;
   final String? textValue;
 
   const ChecklistItemModel({
@@ -45,12 +50,23 @@ class ChecklistItemModel {
     this.stageName = 'Etapa 1: Procedimientos Iniciales',
     this.isRequired = true,
     this.photoUrl,
+    this.photoUrls = const [],
+    this.minPhotos = 1,
+    this.maxPhotos = 5,
     this.photoBeforeUrl,
     this.photoAfterUrl,
     this.options = const [],
     this.selectedOption,
+    this.selectedOptions = const [],
     this.textValue,
   });
+
+  /// Devuelve todas las fotos capturadas en este paso (compatible con `photoUrl` individual y `photoUrls` múltiple).
+  List<String> get allPhotos {
+    if (photoUrls.isNotEmpty) return photoUrls;
+    if (photoUrl != null && photoUrl!.isNotEmpty) return [photoUrl!];
+    return const [];
+  }
 
   bool get isOutOfRange {
     if (type != ChecklistItemType.numericMeasurement || numericValue == null) {
@@ -70,13 +86,20 @@ class ChecklistItemModel {
       case ChecklistItemType.numericMeasurement:
         return numericValue != null && isCompleted;
       case ChecklistItemType.photoRequired:
-        return (photoUrl != null && photoUrl!.isNotEmpty) || isCompleted;
+        final requiredCount = minPhotos < 1 ? 1 : minPhotos;
+        return allPhotos.length >= requiredCount || (isCompleted && allPhotos.isNotEmpty);
       case ChecklistItemType.photoBeforeAfter:
-        return ((photoBeforeUrl != null && photoBeforeUrl!.isNotEmpty && photoAfterUrl != null && photoAfterUrl!.isNotEmpty) || isCompleted);
+        return ((photoBeforeUrl != null &&
+                photoBeforeUrl!.isNotEmpty &&
+                photoAfterUrl != null &&
+                photoAfterUrl!.isNotEmpty) ||
+            isCompleted);
       case ChecklistItemType.textObservation:
         return (textValue != null && textValue!.trim().isNotEmpty) || isCompleted;
       case ChecklistItemType.singleChoice:
         return (selectedOption != null && selectedOption!.isNotEmpty) || isCompleted;
+      case ChecklistItemType.multipleChoice:
+        return selectedOptions.isNotEmpty || isCompleted;
     }
   }
 
@@ -95,10 +118,14 @@ class ChecklistItemModel {
     String? stageName,
     bool? isRequired,
     String? photoUrl,
+    List<String>? photoUrls,
+    int? minPhotos,
+    int? maxPhotos,
     String? photoBeforeUrl,
     String? photoAfterUrl,
     List<String>? options,
     String? selectedOption,
+    List<String>? selectedOptions,
     String? textValue,
   }) {
     return ChecklistItemModel(
@@ -116,10 +143,14 @@ class ChecklistItemModel {
       stageName: stageName ?? this.stageName,
       isRequired: isRequired ?? this.isRequired,
       photoUrl: photoUrl ?? this.photoUrl,
+      photoUrls: photoUrls ?? this.photoUrls,
+      minPhotos: minPhotos ?? this.minPhotos,
+      maxPhotos: maxPhotos ?? this.maxPhotos,
       photoBeforeUrl: photoBeforeUrl ?? this.photoBeforeUrl,
       photoAfterUrl: photoAfterUrl ?? this.photoAfterUrl,
       options: options ?? this.options,
       selectedOption: selectedOption ?? this.selectedOption,
+      selectedOptions: selectedOptions ?? this.selectedOptions,
       textValue: textValue ?? this.textValue,
     );
   }
@@ -140,20 +171,35 @@ class ChecklistItemModel {
       'stageName': stageName,
       'isRequired': isRequired,
       'photoUrl': photoUrl,
+      'photoUrls': photoUrls,
+      'minPhotos': minPhotos,
+      'maxPhotos': maxPhotos,
       'photoBeforeUrl': photoBeforeUrl,
       'photoAfterUrl': photoAfterUrl,
       'options': options,
       'selectedOption': selectedOption,
+      'selectedOptions': selectedOptions,
       'textValue': textValue,
     };
   }
 
   factory ChecklistItemModel.fromMap(Map<String, dynamic> map) {
+    final typeName = map['type'] as String? ?? 'booleanCheck';
+    final parsedType = ChecklistItemType.values.firstWhere(
+      (e) => e.name == typeName,
+      orElse: () => ChecklistItemType.booleanCheck,
+    );
+    final rawPhotoUrls = List<String>.from(map['photoUrls'] as List? ?? []);
+    final legacyPhotoUrl = map['photoUrl'] as String?;
+    if (rawPhotoUrls.isEmpty && legacyPhotoUrl != null && legacyPhotoUrl.isNotEmpty) {
+      rawPhotoUrls.add(legacyPhotoUrl);
+    }
+
     return ChecklistItemModel(
       id: map['id'] as String,
       title: map['title'] as String,
       description: map['description'] as String? ?? '',
-      type: ChecklistItemType.values.byName(map['type'] as String? ?? 'booleanCheck'),
+      type: parsedType,
       isCompleted: map['isCompleted'] as bool? ?? false,
       numericValue: (map['numericValue'] as num?)?.toDouble(),
       unit: map['unit'] as String?,
@@ -163,11 +209,15 @@ class ChecklistItemModel {
       stageId: map['stageId'] as String? ?? 'stg-1',
       stageName: map['stageName'] as String? ?? 'Etapa 1: Procedimientos Iniciales',
       isRequired: map['isRequired'] as bool? ?? true,
-      photoUrl: map['photoUrl'] as String?,
+      photoUrl: legacyPhotoUrl ?? (rawPhotoUrls.isNotEmpty ? rawPhotoUrls.first : null),
+      photoUrls: rawPhotoUrls,
+      minPhotos: (map['minPhotos'] as num?)?.toInt() ?? 1,
+      maxPhotos: (map['maxPhotos'] as num?)?.toInt() ?? 5,
       photoBeforeUrl: map['photoBeforeUrl'] as String?,
       photoAfterUrl: map['photoAfterUrl'] as String?,
       options: List<String>.from(map['options'] as List? ?? []),
       selectedOption: map['selectedOption'] as String?,
+      selectedOptions: List<String>.from(map['selectedOptions'] as List? ?? []),
       textValue: map['textValue'] as String?,
     );
   }

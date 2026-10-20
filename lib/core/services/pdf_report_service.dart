@@ -262,8 +262,10 @@ class PdfReportService {
                         ? '${item.numericValue} ${item.unit ?? ""}'
                         : 'Nominal (${item.minAcceptable ?? ""}-${item.maxAcceptable ?? ""} ${item.unit ?? ""})';
                   } else if (item.type == ChecklistItemType.photoRequired) {
-                    tipoStr = 'Foto';
-                    valorStr = item.isCompleted ? 'Registrada' : 'Pendiente';
+                    tipoStr = item.minPhotos > 1 ? 'Fotos (${item.minPhotos})' : 'Foto';
+                    valorStr = item.allPhotos.isNotEmpty
+                        ? '${item.allPhotos.length}/${item.minPhotos} registradas'
+                        : (item.isCompleted ? 'Registrada' : 'Pendiente');
                   } else if (item.type == ChecklistItemType.photoBeforeAfter) {
                     tipoStr = 'Foto Antes/Después';
                     valorStr = item.isCompleted ? 'Ambas registradas' : 'Incompleto';
@@ -273,6 +275,9 @@ class PdfReportService {
                   } else if (item.type == ChecklistItemType.singleChoice) {
                     tipoStr = 'Selección';
                     valorStr = item.selectedOption ?? '-';
+                  } else if (item.type == ChecklistItemType.multipleChoice) {
+                    tipoStr = 'Múltiple';
+                    valorStr = item.selectedOptions.isNotEmpty ? item.selectedOptions.join(', ') : '-';
                   }
 
                   final resultadoStr = item.isCompleted ? 'CONFORME' : (item.isRequired ? 'PENDIENTE (Req)' : 'OPCIONAL');

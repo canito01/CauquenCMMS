@@ -458,7 +458,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
         );
   }
 
-  // Registrar foto en paso de checklist específico
+  // Registrar foto en paso de checklist específico (soporta 1 o múltiples fotos)
   Future<void> recordStepPhoto(String orderId, String itemId, String photoData) async {
     final storage = ref.read(localStorageProvider);
     final isOnline = ref.read(isOnlineStateProvider);
@@ -467,9 +467,17 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
       if (wo.id == orderId) {
         final updatedChecklist = wo.checklist.map((item) {
           if (item.id == itemId) {
+            final currentPhotos = List<String>.from(item.allPhotos);
+            if (currentPhotos.length < item.maxPhotos) {
+              currentPhotos.add(photoData);
+            } else if (currentPhotos.isNotEmpty) {
+              currentPhotos[currentPhotos.length - 1] = photoData;
+            }
+            final requiredMin = item.minPhotos < 1 ? 1 : item.minPhotos;
             return item.copyWith(
-              photoUrl: photoData,
-              isCompleted: true,
+              photoUrl: currentPhotos.isNotEmpty ? currentPhotos.first : photoData,
+              photoUrls: currentPhotos,
+              isCompleted: currentPhotos.length >= requiredMin,
             );
           }
           return item;
@@ -492,6 +500,78 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto registrada en paso de OT',
         );
+  }
+
+  // Eliminar una foto específica de un paso de checklist multi-foto
+  Future<void> removeStepPhoto(String orderId, String itemId, int photoIndex) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == itemId) {
+            final currentPhotos = List<String>.from(item.allPhotos);
+            if (photoIndex >= 0 && photoIndex < currentPhotos.length) {
+              currentPhotos.removeAt(photoIndex);
+            }
+            final requiredMin = item.minPhotos < 1 ? 1 : item.minPhotos;
+            return item.copyWith(
+              photoUrl: currentPhotos.isNotEmpty ? currentPhotos.first : '',
+              photoUrls: currentPhotos,
+              isCompleted: currentPhotos.length >= requiredMin,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
+  }
+
+  // Alternar opción en paso de selección múltiple (MaintainX Multiple Choice)
+  Future<void> toggleStepMultiOption(String orderId, String itemId, String option) async {
+    final storage = ref.read(localStorageProvider);
+    final isOnline = ref.read(isOnlineStateProvider);
+
+    final updatedList = state.map((wo) {
+      if (wo.id == orderId) {
+        final updatedChecklist = wo.checklist.map((item) {
+          if (item.id == itemId) {
+            final currentSelected = List<String>.from(item.selectedOptions);
+            if (currentSelected.contains(option)) {
+              currentSelected.remove(option);
+            } else {
+              currentSelected.add(option);
+            }
+            return item.copyWith(
+              selectedOptions: currentSelected,
+              isCompleted: currentSelected.isNotEmpty,
+            );
+          }
+          return item;
+        }).toList();
+
+        return wo.copyWith(
+          checklist: updatedChecklist,
+          syncStatus: isOnline ? SyncStatus.synced : SyncStatus.pendingSync,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return wo;
+    }).toList();
+
+    state = updatedList;
+    await storage.saveWorkOrders(updatedList);
   }
 
   // Registrar foto antes/después en paso específico

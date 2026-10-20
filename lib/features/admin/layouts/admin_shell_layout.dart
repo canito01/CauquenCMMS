@@ -29,12 +29,160 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     'Personal & Cuadrillas',
   ];
 
+  Widget _buildSidebarContent(UserModel? user, {bool isDrawer = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header Marca
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(
+                  child: Text('🦅', style: TextStyle(fontSize: 18)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Cauquén CMMS',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    Text(
+                      'Portal Administrativo',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, thickness: 1, color: AppColors.border),
+
+        // Menú de Navegación
+        const SizedBox(height: 16),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          child: Text(
+            'GESTIÓN & OPERACIONES',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ),
+        _buildNavItem(0, Icons.insert_chart_outlined, Icons.insert_chart, 'Panel & Reportes', isDrawer: isDrawer),
+        _buildNavItem(1, Icons.assignment_outlined, Icons.assignment, 'Órdenes de Trabajo', isDrawer: isDrawer),
+        _buildNavItem(2, Icons.precision_manufacturing_outlined, Icons.precision_manufacturing, 'Activos', isDrawer: isDrawer),
+        _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Repuestos & Stock', isDrawer: isDrawer),
+        _buildNavItem(4, Icons.people_outline, Icons.people, 'Personal & Cuadrillas', isDrawer: isDrawer),
+
+        const Spacer(),
+        const Divider(height: 1, thickness: 1, color: AppColors.border),
+
+        // Switch a Modo Operario Móvil
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: OutlinedButton.icon(
+            onPressed: () => context.go('/'),
+            icon: const Icon(Icons.phone_android, size: 15, color: AppColors.primary),
+            label: const Text(
+              'Modo Operario Móvil',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+            ),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: AppColors.border),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+
+        // Perfil del Administrador Logueado
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: AppColors.primaryContainer,
+                child: Text(
+                  (user?.name.isNotEmpty == true ? user!.name[0] : 'A').toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.name ?? 'Administrador',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      user?.roleDisplayName ?? 'Supervisión',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Cerrar Sesión',
+                icon: const Icon(Icons.logout, size: 16, color: AppColors.textSecondary),
+                hoverColor: AppColors.dangerContainer,
+                splashRadius: 18,
+                onPressed: () async {
+                  await ref.read(authProvider.notifier).logout();
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final isSupervisor = user?.role == UserRole.supervisor;
     final isAdmin = user?.role == UserRole.admin;
+    final isMobile = MediaQuery.of(context).size.width < 800;
 
     if (!isSupervisor && !isAdmin) {
       return Scaffold(
@@ -42,7 +190,8 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
         body: Center(
           child: Container(
             width: 440,
-            padding: const EdgeInsets.all(32),
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
@@ -60,7 +209,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.dangerContainer,
                     shape: BoxShape.circle,
                   ),
@@ -82,19 +231,62 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                   style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () => context.go('/'),
-                  icon: const Icon(Icons.phone_android, size: 16),
-                  label: const Text('Ir a la App Móvil de Operario'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.go('/'),
+                    icon: const Icon(Icons.phone_android, size: 16),
+                    label: const Text('Ir a la App Móvil de Operario'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
+      );
+    }
+
+    final screensStack = IndexedStack(
+      index: _selectedIndex,
+      children: const [
+        AdminDashboardScreen(),
+        AdminWorkOrdersScreen(),
+        AdminAssetsScreen(),
+        AdminInventoryScreen(),
+        AdminUsersScreen(),
+      ],
+    );
+
+    if (isMobile) {
+      return Scaffold(
+        backgroundColor: AppColors.surfaceLight,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          title: Text(
+            _tabTitles[_selectedIndex],
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+          ),
+          actions: const [
+            Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: ConnectivityBadge(),
+            ),
+          ],
+        ),
+        drawer: Drawer(
+          backgroundColor: AppColors.surfaceLight,
+          child: SafeArea(
+            child: _buildSidebarContent(user, isDrawer: true),
+          ),
+        ),
+        body: screensStack,
       );
     }
 
@@ -109,150 +301,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
               color: AppColors.surfaceLight,
               border: Border(right: BorderSide(color: AppColors.border, width: 1)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header Marca
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Center(
-                          child: Text('🦅', style: TextStyle(fontSize: 18)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Cauquén CMMS',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textPrimary,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            Text(
-                              'Portal Administrativo',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, thickness: 1, color: AppColors.border),
-
-                // Menú de Navegación
-                const SizedBox(height: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                  child: Text(
-                    'GESTIÓN & OPERACIONES',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                _buildNavItem(0, Icons.insert_chart_outlined, Icons.insert_chart, 'Panel & Reportes'),
-                _buildNavItem(1, Icons.assignment_outlined, Icons.assignment, 'Órdenes de Trabajo'),
-                _buildNavItem(2, Icons.precision_manufacturing_outlined, Icons.precision_manufacturing, 'Activos'),
-                _buildNavItem(3, Icons.inventory_2_outlined, Icons.inventory_2, 'Repuestos & Stock'),
-                _buildNavItem(4, Icons.people_outline, Icons.people, 'Personal & Cuadrillas'),
-
-                const Spacer(),
-                const Divider(height: 1, thickness: 1, color: AppColors.border),
-
-                // Switch a Modo Operario Móvil
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: OutlinedButton.icon(
-                    onPressed: () => context.go('/'),
-                    icon: const Icon(Icons.phone_android, size: 15, color: AppColors.primary),
-                    label: const Text(
-                      'Modo Operario Móvil',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-
-                // Perfil del Administrador Logueado
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 17,
-                        backgroundColor: AppColors.primaryContainer,
-                        child: Text(
-                          (user?.name.isNotEmpty == true ? user!.name[0] : 'A').toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user?.name ?? 'Administrador',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              user?.roleDisplayName ?? 'Supervisión',
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Cerrar Sesión',
-                        icon: const Icon(Icons.logout, size: 16, color: AppColors.textSecondary),
-                        hoverColor: AppColors.dangerContainer,
-                        splashRadius: 18,
-                        onPressed: () async {
-                          await ref.read(authProvider.notifier).logout();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            child: _buildSidebarContent(user, isDrawer: false),
           ),
 
           // Área de Contenido Principal
@@ -311,18 +360,7 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
                 ),
 
                 // Pantalla Activa
-                Expanded(
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    children: const [
-                      AdminDashboardScreen(),
-                      AdminWorkOrdersScreen(),
-                      AdminAssetsScreen(),
-                      AdminInventoryScreen(),
-                      AdminUsersScreen(),
-                    ],
-                  ),
-                ),
+                Expanded(child: screensStack),
               ],
             ),
           ),
@@ -331,16 +369,21 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData unselectedIcon, IconData selectedIcon, String title) {
+  Widget _buildNavItem(int index, IconData unselectedIcon, IconData selectedIcon, String title, {bool isDrawer = false}) {
     final isSelected = _selectedIndex == index;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: InkWell(
-        onTap: () => setState(() => _selectedIndex = index),
+        onTap: () {
+          setState(() => _selectedIndex = index);
+          if (isDrawer && Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+        },
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected ? AppColors.primaryContainer : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
@@ -371,4 +414,3 @@ class _AdminShellLayoutState extends ConsumerState<AdminShellLayout> {
     );
   }
 }
-

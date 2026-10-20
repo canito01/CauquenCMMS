@@ -84,14 +84,22 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
         final maxStr = item.maxAcceptable != null ? '${item.maxAcceptable}' : 'max';
         return 'Medición ($minStr a $maxStr ${item.unit ?? ""})';
       case ChecklistItemType.photoRequired:
-        return 'Foto Obligatoria';
+        if (item.minPhotos > 1) {
+          return 'Fotos Obligatorias (${item.minPhotos} mín / ${item.maxPhotos} máx)';
+        }
+        return item.maxPhotos > 1
+            ? 'Foto Obligatoria (1 mín / hasta ${item.maxPhotos})'
+            : 'Foto Obligatoria (1 foto)';
       case ChecklistItemType.photoBeforeAfter:
-        return 'Fotos Antes y Después';
+        return 'Fotos Antes y Después (2 fotos)';
       case ChecklistItemType.textObservation:
         return 'Observación de Texto';
       case ChecklistItemType.singleChoice:
         final opts = item.options.isNotEmpty ? item.options.join(', ') : 'Opciones';
-        return 'Selección ($opts)';
+        return 'Selección Única ($opts)';
+      case ChecklistItemType.multipleChoice:
+        final opts = item.options.isNotEmpty ? item.options.join(', ') : 'Sub-ítems';
+        return 'Selección Múltiple ($opts)';
     }
   }
 
@@ -109,6 +117,8 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
         return Colors.teal;
       case ChecklistItemType.singleChoice:
         return Colors.indigo;
+      case ChecklistItemType.multipleChoice:
+        return Colors.deepOrange;
     }
   }
 
@@ -201,6 +211,8 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
     final minCtrl = TextEditingController(text: initialStep?.minAcceptable != null ? initialStep!.minAcceptable.toString() : '1.0');
     final maxCtrl = TextEditingController(text: initialStep?.maxAcceptable != null ? initialStep!.maxAcceptable.toString() : '5.0');
     final optionsCtrl = TextEditingController(text: initialStep?.options.isNotEmpty == true ? initialStep!.options.join(', ') : 'Bueno, Regular, Malo');
+    int minPhotos = initialStep?.minPhotos ?? 1;
+    int maxPhotos = initialStep?.maxPhotos ?? 5;
     bool isRequired = initialStep?.isRequired ?? true;
 
     final effectiveStages = (stages != null && stages.isNotEmpty)
@@ -295,15 +307,164 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         items: const [
                           DropdownMenuItem(value: ChecklistItemType.booleanCheck, child: Text('✅ Inspección Sí/No (Checklist Booleano)')),
                           DropdownMenuItem(value: ChecklistItemType.numericMeasurement, child: Text('🔢 Medición Numérica (con Unidad y Tolerancias)')),
-                          DropdownMenuItem(value: ChecklistItemType.photoRequired, child: Text('📸 Registro Fotográfico Obligatorio (Cámara)')),
+                          DropdownMenuItem(value: ChecklistItemType.photoRequired, child: Text('📸 Registro Fotográfico (1 o Múltiples Fotos)')),
                           DropdownMenuItem(value: ChecklistItemType.photoBeforeAfter, child: Text('📷 Foto Doble: ANTES y DESPUÉS de la Tarea')),
                           DropdownMenuItem(value: ChecklistItemType.textObservation, child: Text('📝 Observación / Nota Técnica Obligatoria')),
                           DropdownMenuItem(value: ChecklistItemType.singleChoice, child: Text('🔘 Selección de Opción Única')),
+                          DropdownMenuItem(value: ChecklistItemType.multipleChoice, child: Text('☑️ Selección Múltiple / Sub-ítems (Checkboxes)')),
                         ],
                         onChanged: (val) {
                           if (val != null) setStepState(() => stepType = val);
                         },
                       ),
+
+                      if (stepType == ChecklistItemType.photoRequired) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.collections_outlined, size: 17, color: AppColors.primary),
+                                  SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'PERSONALIZACIÓN DE CANTIDAD DE FOTOS (ESTILO MAINTAINX)',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: 0.3),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Configurá cuántas fotos obligatorias debe capturar el operario en este paso (ej. 1 foto, 3 luminarias, 4 ángulos del equipo).',
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('MÍNIMO OBLIGATORIO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.textSecondary)),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.primary),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: minPhotos > 1
+                                                    ? () => setStepState(() => minPhotos--)
+                                                    : null,
+                                              ),
+                                              Text(
+                                                '$minPhotos ${minPhotos == 1 ? "foto" : "fotos"}',
+                                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: minPhotos < 12
+                                                    ? () => setStepState(() {
+                                                          minPhotos++;
+                                                          if (maxPhotos < minPhotos) maxPhotos = minPhotos;
+                                                        })
+                                                    : null,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('MÁXIMO PERMITIDO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.textSecondary)),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.primary),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: maxPhotos > minPhotos
+                                                    ? () => setStepState(() => maxPhotos--)
+                                                    : null,
+                                              ),
+                                              Text(
+                                                '$maxPhotos ${maxPhotos == 1 ? "foto" : "fotos"}',
+                                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: maxPhotos < 15
+                                                    ? () => setStepState(() => maxPhotos++)
+                                                    : null,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [1, 2, 3, 4, 5, 6].map((cnt) {
+                                  final isSelectedCnt = minPhotos == cnt;
+                                  return ChoiceChip(
+                                    label: Text('Pedir $cnt ${cnt == 1 ? "foto" : "fotos"}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isSelectedCnt ? Colors.white : AppColors.textPrimary)),
+                                    selected: isSelectedCnt,
+                                    selectedColor: AppColors.primary,
+                                    backgroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                    onSelected: (_) {
+                                      setStepState(() {
+                                        minPhotos = cnt;
+                                        if (maxPhotos < cnt) maxPhotos = cnt + 2;
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       if (stepType == ChecklistItemType.numericMeasurement) ...[
                         const SizedBox(height: 12),
@@ -335,14 +496,40 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                         ),
                       ],
 
-                      if (stepType == ChecklistItemType.singleChoice) ...[
+                      if (stepType == ChecklistItemType.singleChoice || stepType == ChecklistItemType.multipleChoice) ...[
                         const SizedBox(height: 12),
                         TextField(
                           controller: optionsCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Opciones posibles (separadas por coma)',
-                            hintText: 'Ej: Conforme, Observado, Crítico',
+                          decoration: InputDecoration(
+                            labelText: stepType == ChecklistItemType.multipleChoice
+                                ? 'Sub-ítems o casillas verificables (separados por coma)'
+                                : 'Opciones posibles (separadas por coma)',
+                            hintText: stepType == ChecklistItemType.multipleChoice
+                                ? 'Ej: Luminaria 1 OK, Luminaria 2 OK, Luminaria 3 OK'
+                                : 'Ej: Conforme, Observado, Crítico',
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            ActionChip(
+                              label: const Text('Conforme / Observado / Crítico', style: TextStyle(fontSize: 10)),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setStepState(() => optionsCtrl.text = 'Conforme, Observado, Crítico'),
+                            ),
+                            ActionChip(
+                              label: const Text('Fase R / Fase S / Fase T / Neutro', style: TextStyle(fontSize: 10)),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setStepState(() => optionsCtrl.text = 'Fase R, Fase S, Fase T, Neutro'),
+                            ),
+                            ActionChip(
+                              label: const Text('Luminaria 1 / 2 / 3 / 4', style: TextStyle(fontSize: 10)),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setStepState(() => optionsCtrl.text = 'Luminaria 1, Luminaria 2, Luminaria 3, Luminaria 4'),
+                            ),
+                          ],
                         ),
                       ],
 
@@ -416,15 +603,19 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                       unit: stepType == ChecklistItemType.numericMeasurement ? unitCtrl.text.trim() : null,
                       minAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(minCtrl.text.trim()) : null,
                       maxAcceptable: stepType == ChecklistItemType.numericMeasurement ? double.tryParse(maxCtrl.text.trim()) : null,
+                      minPhotos: stepType == ChecklistItemType.photoRequired ? minPhotos : 1,
+                      maxPhotos: stepType == ChecklistItemType.photoRequired ? (maxPhotos < minPhotos ? minPhotos : maxPhotos) : 5,
                       options: optionsList,
                       isRequired: isRequired,
                       isCompleted: initialStep?.isCompleted ?? false,
                       numericValue: initialStep?.numericValue,
                       photoUrl: initialStep?.photoUrl,
+                      photoUrls: initialStep?.photoUrls ?? const [],
                       photoBeforeUrl: initialStep?.photoBeforeUrl,
                       photoAfterUrl: initialStep?.photoAfterUrl,
                       textValue: initialStep?.textValue,
                       selectedOption: initialStep?.selectedOption,
+                      selectedOptions: initialStep?.selectedOptions ?? const [],
                     );
                     Navigator.pop(ctx, item);
                   },
@@ -773,6 +964,25 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                                                     ),
                                                   ],
                                                 ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.copy_outlined, size: 15, color: AppColors.textSecondary),
+                                                tooltip: 'Duplicar este paso',
+                                                onPressed: () {
+                                                  final duplicated = step.copyWith(
+                                                    id: const Uuid().v4(),
+                                                    title: '${step.title} (Copia)',
+                                                    isCompleted: false,
+                                                  );
+                                                  final idxInMain = steps.indexOf(step);
+                                                  setDialogState(() {
+                                                    if (idxInMain >= 0 && idxInMain < steps.length - 1) {
+                                                      steps.insert(idxInMain + 1, duplicated);
+                                                    } else {
+                                                      steps.add(duplicated);
+                                                    }
+                                                  });
+                                                },
                                               ),
                                               IconButton(
                                                 icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
@@ -1244,8 +1454,8 @@ class _AdminWorkOrdersScreenState extends ConsumerState<AdminWorkOrdersScreen> w
                               SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'Configura los pasos del protocolo para el operario (inspección Sí/No, medición con tolerancias o fotos requeridas).',
-                                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                                  'Configura los pasos del protocolo para el operario (inspección Sí/No, medición con tolerancias, múltiples fotos o casillas de verificación).',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                 ),
                               ),
                             ],

@@ -223,8 +223,10 @@ class TaskTemplateModel {
             stageId: 'stg-gen-2',
             stageName: 'Etapa 2: Inspección de Luminarias & Fotocélulas',
             title: 'Foto de las luminarias encendidas (verificación una a una)',
-            description: 'Capturar el estado encendido verificando tubos o campanas LED quemadas.',
+            description: 'Capturar una foto por cada luminaria encendida (mínimo 3 fotos requeridas).',
             type: ChecklistItemType.photoRequired,
+            minPhotos: 3,
+            maxPhotos: 8,
             isRequired: true,
           ),
 

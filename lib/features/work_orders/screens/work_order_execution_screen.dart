@@ -658,29 +658,41 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
                       },
                     ),
 
-                    // Botones de Navegación Rápida entre Etapas
+                    // Botones de Navegación Rápida entre Etapas (100% Ancho Táctil)
                     if (stages.length > 1) ...[
                       const SizedBox(height: 12),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           if (_selectedStageIndex > 0)
-                            OutlinedButton.icon(
-                              onPressed: () => setState(() => _selectedStageIndex--),
-                              icon: const Icon(Icons.arrow_back, size: 14),
-                              label: const Text('Etapa Anterior', style: TextStyle(fontSize: 12)),
-                            )
-                          else
-                            const SizedBox(),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => setState(() => _selectedStageIndex--),
+                                icon: const Icon(Icons.arrow_back, size: 16),
+                                label: const Text('Etapa Anterior', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 46),
+                                  side: const BorderSide(color: AppColors.primary),
+                                  foregroundColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          if (_selectedStageIndex > 0 && _selectedStageIndex < stages.length - 1)
+                            const SizedBox(width: 10),
                           if (_selectedStageIndex < stages.length - 1)
-                            ElevatedButton.icon(
-                              onPressed: () => setState(() => _selectedStageIndex++),
-                              icon: const Icon(Icons.arrow_forward, size: 14),
-                              label: const Text('Siguiente Etapa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                            )
-                          else
-                            const SizedBox(),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => setState(() => _selectedStageIndex++),
+                                icon: const Icon(Icons.arrow_forward, size: 16),
+                                label: const Text('Siguiente Etapa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 46),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -1124,7 +1136,9 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
       stepTypeTitle = 'Medición (${item.minAcceptable ?? 0} a ${item.maxAcceptable ?? 0} ${item.unit ?? ""})';
       stepTypeColor = AppColors.warning;
     } else if (item.type == ChecklistItemType.photoRequired) {
-      stepTypeTitle = 'Foto de Evidencia Requerida';
+      stepTypeTitle = item.minPhotos > 1
+          ? 'Fotos Requeridas (${item.allPhotos.length}/${item.minPhotos} mín)'
+          : 'Foto Requerida (${item.allPhotos.length}/${item.maxPhotos} máx)';
       stepTypeColor = AppColors.paused;
     } else if (item.type == ChecklistItemType.photoBeforeAfter) {
       stepTypeTitle = 'Fotos Antes y Después';
@@ -1133,15 +1147,18 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
       stepTypeTitle = 'Observación / Nota Técnica';
       stepTypeColor = Colors.teal;
     } else if (item.type == ChecklistItemType.singleChoice) {
-      stepTypeTitle = 'Selección de Opción';
+      stepTypeTitle = 'Selección Única';
       stepTypeColor = Colors.indigo;
+    } else if (item.type == ChecklistItemType.multipleChoice) {
+      stepTypeTitle = 'Selección Múltiple (${item.selectedOptions.length}/${item.options.length})';
+      stepTypeColor = Colors.deepOrange;
     }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: isDone ? AppColors.success.withValues(alpha: 0.4) : (item.isRequired ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
           width: isDone ? 1.5 : 1.0,
@@ -1150,14 +1167,17 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Cabecera del paso: Badges de Tipo y Obligatoriedad
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Cabecera del paso: Badges de Tipo y Obligatoriedad (Sin overflow en móviles estrechos)
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: stepTypeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
@@ -1314,85 +1334,172 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
               ),
             ],
 
-            // 2. Tipo: Foto Requerida
+            // 2. Tipo: Foto Requerida (Soporta 1 o Múltiples Fotos estilo MaintainX)
             if (item.type == ChecklistItemType.photoRequired) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.all(10),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: item.photoUrl != null
-                    ? Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: InkWell(
-                              onTap: () => _viewSinglePhotoFullscreen(item.photoUrl!, item.title),
-                              child: _buildStepPhotoWidget(item.photoUrl!, width: 70, height: 70),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(Icons.check_circle, size: 14, color: AppColors.success),
-                                    SizedBox(width: 4),
-                                    Text('Foto registrada', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
-                                  ],
-                                ),
-                                const Text('Toca la miniatura para ampliar', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                                if (!isReadOnly) ...[
-                                  const SizedBox(height: 6),
-                                  OutlinedButton.icon(
-                                    onPressed: () => _pickStepPhoto(ImageSource.camera, order.id, item.id),
-                                    icon: const Icon(Icons.refresh, size: 12),
-                                    label: const Text('Volver a capturar', style: TextStyle(fontSize: 10)),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          const Icon(Icons.add_a_photo_outlined, size: 28, color: AppColors.paused),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Text(
-                              'Requiere captura fotográfica en planta como evidencia técnica.',
-                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                            ),
-                          ),
-                          if (!isReadOnly) ...[
-                            ElevatedButton.icon(
-                              onPressed: () => _pickStepPhoto(ImageSource.camera, order.id, item.id),
-                              icon: const Icon(Icons.camera_alt, size: 14),
-                              label: const Text('Cámara', style: TextStyle(fontSize: 11)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              item.allPhotos.length >= item.minPhotos ? Icons.check_circle : Icons.camera_alt_outlined,
+                              size: 16,
+                              color: item.allPhotos.length >= item.minPhotos ? AppColors.success : AppColors.paused,
                             ),
                             const SizedBox(width: 6),
-                            IconButton(
-                              icon: const Icon(Icons.photo_library_outlined, size: 18, color: AppColors.primary),
-                              tooltip: 'Elegir de Galería',
-                              onPressed: () => _pickStepPhoto(ImageSource.gallery, order.id, item.id),
+                            Text(
+                              item.minPhotos > 1
+                                  ? 'Evidencia Multi-Foto (${item.minPhotos} mín)'
+                                  : 'Evidencia Fotográfica',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                             ),
                           ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: item.allPhotos.length >= item.minPhotos
+                                ? AppColors.successContainer
+                                : AppColors.warningContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${item.allPhotos.length} / ${item.minPhotos} obligatorias (máx ${item.maxPhotos})',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: item.allPhotos.length >= item.minPhotos ? AppColors.success : AppColors.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    if (item.allPhotos.isNotEmpty) ...[
+                      SizedBox(
+                        height: 96,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: item.allPhotos.length,
+                          itemBuilder: (ctx, pIdx) {
+                            final photoUrl = item.allPhotos[pIdx];
+                            return Container(
+                              margin: const EdgeInsets.only(right: 10),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: InkWell(
+                                      onTap: () => _viewSinglePhotoFullscreen(photoUrl, '${item.title} - Foto #${pIdx + 1}'),
+                                      child: _buildStepPhotoWidget(photoUrl, width: 92, height: 92),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 4,
+                                    left: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '#${pIdx + 1}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  if (!isReadOnly)
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: InkWell(
+                                        onTap: () {
+                                          ref.read(workOrdersProvider.notifier).removeStepPhoto(order.id, item.id, pIdx);
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.danger,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close, size: 13, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ] else ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          item.minPhotos > 1
+                              ? 'Este paso requiere capturar al menos ${item.minPhotos} fotografías para quedar validado.'
+                              : 'Capturá una foto en planta para validar este paso.',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+
+                    if (!isReadOnly && item.allPhotos.length < item.maxPhotos)
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _pickStepPhoto(ImageSource.camera, order.id, item.id),
+                              icon: const Icon(Icons.camera_alt, size: 16),
+                              label: Text(
+                                item.allPhotos.isEmpty
+                                    ? 'TOMAR FOTO (1/${item.minPhotos})'
+                                    : 'AGREGAR FOTO (${item.allPhotos.length + 1}/${item.maxPhotos})',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(0, 42),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _pickStepPhoto(ImageSource.gallery, order.id, item.id),
+                              icon: const Icon(Icons.photo_library_outlined, size: 16),
+                              label: const Text('Galería', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                minimumSize: const Size(0, 42),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
+                  ],
+                ),
               ),
             ],
 
@@ -1561,7 +1668,7 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
               ),
             ],
 
-            // 5. Tipo: Selección de Opción
+            // 5. Tipo: Selección de Opción Única
             if (item.type == ChecklistItemType.singleChoice) ...[
               const SizedBox(height: 8),
               Container(
@@ -1573,7 +1680,7 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text('Seleccione el estado verificado:', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
@@ -1596,6 +1703,82 @@ class _WorkOrderExecutionScreenState extends ConsumerState<WorkOrderExecutionScr
                         );
                       }).toList(),
                     ),
+                  ],
+                ),
+              ),
+            ],
+
+            // 6. Tipo: Selección Múltiple / Sub-ítems Verificables (MaintainX Checkboxes)
+            if (item.type == ChecklistItemType.multipleChoice) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Marque todos los ítems verificados:',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          '${item.selectedOptions.length}/${item.options.length} marcados',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ...item.options.map((option) {
+                      final isChecked = item.selectedOptions.contains(option);
+                      return InkWell(
+                        onTap: isReadOnly
+                            ? null
+                            : () {
+                                ref.read(workOrdersProvider.notifier).toggleStepMultiOption(order.id, item.id, option);
+                              },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isChecked ? AppColors.successContainer.withValues(alpha: 0.6) : Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isChecked ? AppColors.success : AppColors.border,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isChecked ? Icons.check_box : Icons.check_box_outline_blank,
+                                size: 18,
+                                color: isChecked ? AppColors.success : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  option,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isChecked ? FontWeight.w700 : FontWeight.w500,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
