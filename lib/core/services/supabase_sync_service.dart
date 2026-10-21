@@ -147,8 +147,51 @@ class SupabaseSyncService {
     } catch (_) {}
   }
 
+  static Future<void> deleteAssetFromCloud(String assetId) async {
+    final supabase = client;
+    if (supabase == null) return;
+    try {
+      await supabase.from('assets').delete().eq('id', assetId);
+    } catch (_) {}
+  }
+
+  static Future<void> deleteSparePartFromCloud(String partId) async {
+    final supabase = client;
+    if (supabase == null) return;
+    try {
+      await supabase.from('spare_parts').delete().eq('id', partId);
+    } catch (_) {}
+  }
+
+  static Future<void> deleteTemplateFromCloud(String templateId) async {
+    final supabase = client;
+    if (supabase == null) return;
+    try {
+      await supabase.from('task_templates').delete().eq('id', templateId);
+    } catch (_) {}
+  }
+
+  static Future<void> deleteCrewFromCloud(String crewId) async {
+    final supabase = client;
+    if (supabase == null) return;
+    try {
+      await supabase.from('crews').delete().eq('id', crewId);
+    } catch (_) {}
+  }
+
+  static Future<void> deleteUserFromCloud(String userId) async {
+    final supabase = client;
+    if (supabase == null) return;
+    try {
+      await supabase.from('plant_users').delete().eq('id', userId);
+    } catch (_) {}
+  }
+
   // Sincronizar órdenes de trabajo locales hacia PostgreSQL y fotos hacia Storage
-  static Future<List<WorkOrderModel>?> syncWorkOrdersToCloud(List<WorkOrderModel> orders) async {
+  static Future<List<WorkOrderModel>?> syncWorkOrdersToCloud(
+    List<WorkOrderModel> orders, {
+    Set<String> deletedIds = const {},
+  }) async {
     final supabase = client;
     if (supabase == null) return null;
 
@@ -156,6 +199,8 @@ class SupabaseSyncService {
       final List<WorkOrderModel> updatedOrders = [];
 
       for (final order in orders) {
+        if (deletedIds.contains(order.id)) continue;
+
         // 1. Upsert en tabla assets
         await supabase.from('assets').upsert({
           'id': order.asset.id,
@@ -299,25 +344,30 @@ class SupabaseSyncService {
           });
         }
 
-        // 6. Sincronizar checklist_items de la OT (limpiar pasos borrados y hacer upsert)
+        // 6. Sincronizar checklist_items de la OT en LOTE (1 sola consulta en vez de N consultas)
         try {
           final existingRows = await supabase
               .from('checklist_items')
               .select('id')
               .eq('work_order_id', order.id);
           final currentIds = updatedChecklist.map((e) => e.id).toSet();
+          final toDeleteIds = <String>[];
           for (final row in (existingRows as List)) {
             final rowId = row['id'] as String?;
             if (rowId != null && !currentIds.contains(rowId)) {
-              await supabase.from('checklist_items').delete().eq('id', rowId);
+              toDeleteIds.add(rowId);
             }
+          }
+          if (toDeleteIds.isNotEmpty) {
+            await supabase.from('checklist_items').delete().inFilter('id', toDeleteIds);
           }
         } catch (_) {}
 
-        for (final item in updatedChecklist) {
-          final stepMetaEncoded = '$_stepMetaPrefix${jsonEncode(item.toMap())}';
-          try {
-            await supabase.from('checklist_items').upsert({
+        if (updatedChecklist.isNotEmpty) {
+          final nowIso = DateTime.now().toIso8601String();
+          final fullBatch = updatedChecklist.map((item) {
+            final stepMetaEncoded = '$_stepMetaPrefix${jsonEncode(item.toMap())}';
+            return {
               'id': item.id,
               'work_order_id': order.id,
               'stage_id': item.stageId,
@@ -342,23 +392,31 @@ class SupabaseSyncService {
               'selected_options': item.selectedOptions,
               'text_value': item.textValue,
               'notes': stepMetaEncoded,
-              'updated_at': DateTime.now().toIso8601String(),
-            });
+              'updated_at': nowIso,
+            };
+          }).toList();
+
+          try {
+            await supabase.from('checklist_items').upsert(fullBatch);
           } catch (_) {
-            await supabase.from('checklist_items').upsert({
-              'id': item.id,
-              'work_order_id': order.id,
-              'title': item.title,
-              'description': item.description,
-              'type': item.type.name,
-              'is_completed': item.isCompleted,
-              'numeric_value': item.numericValue,
-              'unit': item.unit,
-              'min_acceptable': item.minAcceptable,
-              'max_acceptable': item.maxAcceptable,
-              'notes': stepMetaEncoded,
-              'updated_at': DateTime.now().toIso8601String(),
-            });
+            final fallbackBatch = updatedChecklist.map((item) {
+              final stepMetaEncoded = '$_stepMetaPrefix${jsonEncode(item.toMap())}';
+              return {
+                'id': item.id,
+                'work_order_id': order.id,
+                'title': item.title,
+                'description': item.description,
+                'type': item.type.name,
+                'is_completed': item.isCompleted,
+                'numeric_value': item.numericValue,
+                'unit': item.unit,
+                'min_acceptable': item.minAcceptable,
+                'max_acceptable': item.maxAcceptable,
+                'notes': stepMetaEncoded,
+                'updated_at': nowIso,
+              };
+            }).toList();
+            await supabase.from('checklist_items').upsert(fallbackBatch);
           }
         }
 
@@ -406,7 +464,7 @@ class SupabaseSyncService {
           .select()
           .order('updated_at', ascending: false);
 
-      if ((woRows as List).isEmpty) return null;
+      if ((woRows as List).isEmpty) return <WorkOrderModel>[];
 
       final checklistRows = await supabase.from('checklist_items').select();
       final photosRows = await supabase.from('evidence_photos').select();

@@ -133,11 +133,12 @@ class InventoryNotifier extends Notifier<List<SparePartModel>> {
 
   Future<void> deletePart(String partId) async {
     final storage = ref.read(localStorageProvider);
+    await storage.addDeletedId(partId);
     final updated = state.where((p) => p.id != partId).toList();
     state = updated;
     await storage.saveSpareParts(updated);
-    if (SupabaseConfig.isConfigured && ref.read(isOnlineStateProvider)) {
-      await SupabaseSyncService.syncSparePartsToCloud(updated);
+    if (SupabaseConfig.isConfigured) {
+      await SupabaseSyncService.deleteSparePartFromCloud(partId);
     }
   }
 
@@ -206,10 +207,17 @@ final assetsProvider =
 
 // Proveedor de Cola de Sincronización (Riverpod 3 Notifier)
 class SyncQueueNotifier extends Notifier<List<SyncQueueItem>> {
+  bool _isSyncing = false;
+
   @override
   List<SyncQueueItem> build() {
     final storage = ref.watch(localStorageProvider);
     return storage.getSyncQueue();
+  }
+
+  void refreshQueue() {
+    final storage = ref.read(localStorageProvider);
+    state = storage.getSyncQueue();
   }
 
   Future<void> enqueue({
@@ -236,131 +244,152 @@ class SyncQueueNotifier extends Notifier<List<SyncQueueItem>> {
 
   /// Sincronización Bidireccional Completa (Push + Pull) entre PC Admin y Dispositivos Móviles
   Future<bool> syncAllBidirectional() async {
+    if (_isSyncing) return true;
     final storage = ref.read(localStorageProvider);
     final isOnline = ref.read(isOnlineStateProvider);
     if (!isOnline) return false;
 
-    final localOrders = ref.read(workOrdersProvider);
-    final localAssets = ref.read(assetsProvider);
-    final localParts = ref.read(inventoryProvider);
-    final localTemplates = ref.read(taskTemplatesProvider);
-    final localCrews = ref.read(crewsProvider);
-    final localUsers = ref.read(usersProvider);
+    _isSyncing = true;
+    try {
+      final deletedIds = storage.getDeletedIds();
+      final localOrders = ref.read(workOrdersProvider);
+      final localAssets = ref.read(assetsProvider);
+      final localParts = ref.read(inventoryProvider);
+      final localTemplates = ref.read(taskTemplatesProvider);
+      final localCrews = ref.read(crewsProvider);
+      final localUsers = ref.read(usersProvider);
 
-    if (SupabaseConfig.isConfigured) {
-      try {
-        // 1. Si hay cambios pendientes locales en la cola, empujarlos primero (PUSH)
-        if (state.isNotEmpty) {
-          final pushedOrders = await SupabaseSyncService.syncWorkOrdersToCloud(localOrders);
-          if (pushedOrders != null) {
-            await storage.saveWorkOrders(pushedOrders);
-            await ref.read(workOrdersProvider.notifier).updateAllOrders(pushedOrders);
+      if (SupabaseConfig.isConfigured) {
+        try {
+          // 0. Aplicar eliminaciones pendientes en la nube (Tombstones locales)
+          for (final delId in deletedIds) {
+            await SupabaseSyncService.deleteWorkOrderFromCloud(delId);
+            await SupabaseSyncService.deleteTemplateFromCloud(delId);
+            await SupabaseSyncService.deleteSparePartFromCloud(delId);
+            await SupabaseSyncService.deleteCrewFromCloud(delId);
+            await SupabaseSyncService.deleteUserFromCloud(delId);
           }
-          await SupabaseSyncService.syncAssetsToCloud(localAssets);
-          await SupabaseSyncService.syncSparePartsToCloud(localParts);
-          await SupabaseSyncService.syncTemplatesToCloud(localTemplates);
-          await SupabaseSyncService.syncCrewsToCloud(localCrews);
-          await SupabaseSyncService.syncUsersToCloud(localUsers);
 
-          await storage.clearSyncQueue();
-          state = [];
-        }
-
-        // 2. Descargar datos actualizados desde Supabase (PULL)
-        final cloudAssets = await SupabaseSyncService.fetchAssetsFromCloud();
-        if (cloudAssets != null && cloudAssets.isNotEmpty) {
-          await ref.read(assetsProvider.notifier).replaceAllAssets(cloudAssets);
-        } else {
-          await SupabaseSyncService.syncAssetsToCloud(localAssets);
-        }
-
-        final cloudParts = await SupabaseSyncService.fetchSparePartsFromCloud();
-        if (cloudParts != null && cloudParts.isNotEmpty) {
-          await ref.read(inventoryProvider.notifier).replaceAllParts(cloudParts);
-        } else {
-          await SupabaseSyncService.syncSparePartsToCloud(localParts);
-        }
-
-        final cloudTemplates = await SupabaseSyncService.fetchTemplatesFromCloud();
-        if (cloudTemplates != null && cloudTemplates.isNotEmpty) {
-          await ref.read(taskTemplatesProvider.notifier).replaceAllTemplates(cloudTemplates);
-        } else {
-          await SupabaseSyncService.syncTemplatesToCloud(localTemplates);
-        }
-
-        final cloudCrews = await SupabaseSyncService.fetchCrewsFromCloud();
-        if (cloudCrews != null && cloudCrews.isNotEmpty) {
-          await ref.read(crewsProvider.notifier).replaceAllCrews(cloudCrews);
-        } else {
-          await SupabaseSyncService.syncCrewsToCloud(localCrews);
-        }
-
-        final cloudUsers = await SupabaseSyncService.fetchUsersFromCloud();
-        if (cloudUsers != null && cloudUsers.isNotEmpty) {
-          await ref.read(usersProvider.notifier).replaceAllUsers(cloudUsers);
-        } else {
-          await SupabaseSyncService.syncUsersToCloud(localUsers);
-        }
-
-        final effectiveAssets = ref.read(assetsProvider);
-        final cloudOrders = await SupabaseSyncService.fetchWorkOrdersFromCloud(
-          fallbackAssets: effectiveAssets,
-        );
-
-        if (cloudOrders != null && cloudOrders.isNotEmpty) {
-          final currentLocal = ref.read(workOrdersProvider);
-          final Map<String, WorkOrderModel> localMap = {
-            for (final o in currentLocal) o.id: o,
-          };
-
-          final List<WorkOrderModel> merged = [];
-          final Set<String> seenIds = {};
-
-          for (final cloudOrder in cloudOrders) {
-            seenIds.add(cloudOrder.id);
-            final localMatch = localMap[cloudOrder.id];
-            if (localMatch != null &&
-                localMatch.syncStatus == SyncStatus.pendingSync &&
-                localMatch.updatedAt.isAfter(cloudOrder.updatedAt)) {
-              merged.add(localMatch);
-            } else {
-              merged.add(cloudOrder);
+          // 1. Si hay cambios pendientes locales en la cola, empujar ÚNICAMENTE las órdenes modificadas (PUSH)
+          final dirtyEntityIds = state.map((q) => q.entityId).toSet();
+          if (dirtyEntityIds.isNotEmpty) {
+            final dirtyOrders = localOrders
+                .where((o) => dirtyEntityIds.contains(o.id) && !deletedIds.contains(o.id))
+                .toList();
+            if (dirtyOrders.isNotEmpty) {
+              await SupabaseSyncService.syncWorkOrdersToCloud(
+                dirtyOrders,
+                deletedIds: deletedIds,
+              );
             }
+            await storage.clearSyncQueue();
+            state = [];
           }
 
-          for (final localOrder in currentLocal) {
-            if (!seenIds.contains(localOrder.id) &&
-                localOrder.syncStatus == SyncStatus.pendingSync) {
-              merged.add(localOrder);
+          // 2. Descargar datos actualizados desde Supabase (PULL)
+          final cloudAssets = await SupabaseSyncService.fetchAssetsFromCloud();
+          if (cloudAssets != null && cloudAssets.isNotEmpty) {
+            final filteredAssets = cloudAssets.where((a) => !deletedIds.contains(a.id)).toList();
+            await ref.read(assetsProvider.notifier).replaceAllAssets(filteredAssets);
+          } else if (cloudAssets != null && cloudAssets.isEmpty) {
+            await SupabaseSyncService.syncAssetsToCloud(localAssets);
+          }
+
+          final cloudParts = await SupabaseSyncService.fetchSparePartsFromCloud();
+          if (cloudParts != null && cloudParts.isNotEmpty) {
+            final filteredParts = cloudParts.where((p) => !deletedIds.contains(p.id)).toList();
+            await ref.read(inventoryProvider.notifier).replaceAllParts(filteredParts);
+          } else if (cloudParts != null && cloudParts.isEmpty) {
+            await SupabaseSyncService.syncSparePartsToCloud(localParts);
+          }
+
+          final cloudTemplates = await SupabaseSyncService.fetchTemplatesFromCloud();
+          if (cloudTemplates != null && cloudTemplates.isNotEmpty) {
+            final filteredTemplates = cloudTemplates.where((t) => !deletedIds.contains(t.id)).toList();
+            await ref.read(taskTemplatesProvider.notifier).replaceAllTemplates(filteredTemplates);
+          } else if (cloudTemplates != null && cloudTemplates.isEmpty) {
+            await SupabaseSyncService.syncTemplatesToCloud(localTemplates);
+          }
+
+          final cloudCrews = await SupabaseSyncService.fetchCrewsFromCloud();
+          if (cloudCrews != null && cloudCrews.isNotEmpty) {
+            final filteredCrews = cloudCrews.where((c) => !deletedIds.contains(c.id)).toList();
+            await ref.read(crewsProvider.notifier).replaceAllCrews(filteredCrews);
+          } else if (cloudCrews != null && cloudCrews.isEmpty) {
+            await SupabaseSyncService.syncCrewsToCloud(localCrews);
+          }
+
+          final cloudUsers = await SupabaseSyncService.fetchUsersFromCloud();
+          if (cloudUsers != null && cloudUsers.isNotEmpty) {
+            final filteredUsers = cloudUsers.where((u) => !deletedIds.contains(u.id)).toList();
+            await ref.read(usersProvider.notifier).replaceAllUsers(filteredUsers);
+          } else if (cloudUsers != null && cloudUsers.isEmpty) {
+            await SupabaseSyncService.syncUsersToCloud(localUsers);
+          }
+
+          final effectiveAssets = ref.read(assetsProvider);
+          final cloudOrders = await SupabaseSyncService.fetchWorkOrdersFromCloud(
+            fallbackAssets: effectiveAssets,
+          );
+
+          if (cloudOrders != null) {
+            final latestDeleted = storage.getDeletedIds();
+            final currentQueueIds = storage.getSyncQueue().map((q) => q.entityId).toSet();
+            final currentLocal = ref.read(workOrdersProvider);
+            final Map<String, WorkOrderModel> localMap = {
+              for (final o in currentLocal) o.id: o,
+            };
+
+            final List<WorkOrderModel> merged = [];
+            final Set<String> seenIds = {};
+
+            for (final cloudOrder in cloudOrders) {
+              if (latestDeleted.contains(cloudOrder.id)) continue;
+              seenIds.add(cloudOrder.id);
+              final localMatch = localMap[cloudOrder.id];
+              if (localMatch != null &&
+                  (localMatch.syncStatus == SyncStatus.pendingSync ||
+                      currentQueueIds.contains(localMatch.id)) &&
+                  localMatch.updatedAt.isAfter(cloudOrder.updatedAt)) {
+                merged.add(localMatch);
+              } else {
+                merged.add(cloudOrder);
+              }
             }
-          }
 
-          await ref.read(workOrdersProvider.notifier).updateAllOrders(merged);
-        } else {
-          // Si la nube aún estaba vacía, sembrar las órdenes iniciales
-          final seeded = await SupabaseSyncService.syncWorkOrdersToCloud(localOrders);
-          if (seeded != null) {
-            await ref.read(workOrdersProvider.notifier).updateAllOrders(seeded);
+            // Solo conservar órdenes locales que aún están pendientes de subir (creadas offline)
+            for (final localOrder in currentLocal) {
+              if (!seenIds.contains(localOrder.id) &&
+                  !latestDeleted.contains(localOrder.id) &&
+                  (localOrder.syncStatus == SyncStatus.pendingSync ||
+                      currentQueueIds.contains(localOrder.id))) {
+                merged.add(localOrder);
+              }
+            }
+
+            await ref.read(workOrdersProvider.notifier).updateAllOrders(merged);
           }
+          return true;
+        } catch (_) {
+          return false;
         }
+      } else {
+        await Future.delayed(const Duration(milliseconds: 500));
+        final updatedOrders = localOrders.map((o) {
+          if (o.syncStatus == SyncStatus.pendingSync) {
+            return o.copyWith(syncStatus: SyncStatus.synced);
+          }
+          return o;
+        }).toList();
+
+        await storage.saveWorkOrders(updatedOrders);
+        ref.read(workOrdersProvider.notifier).refreshFromStorage();
+        await storage.clearSyncQueue();
+        state = [];
         return true;
-      } catch (_) {
-        return false;
       }
-    } else {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final updatedOrders = localOrders.map((o) {
-        if (o.syncStatus == SyncStatus.pendingSync) {
-          return o.copyWith(syncStatus: SyncStatus.synced);
-        }
-        return o;
-      }).toList();
-
-      await storage.saveWorkOrders(updatedOrders);
-      ref.read(workOrdersProvider.notifier).refreshFromStorage();
-      await storage.clearSyncQueue();
-      state = [];
-      return true;
+    } finally {
+      _isSyncing = false;
     }
   }
 
@@ -393,18 +422,40 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
     state = storage.getWorkOrders();
   }
 
-  Future<void> _pushToCloudIfOnline() async {
-    final isOnline = ref.read(isOnlineStateProvider);
-    if (isOnline && SupabaseConfig.isConfigured) {
-      await ref.read(syncQueueProvider.notifier).processSyncQueue();
+  /// Sube inmediatamente una única orden modificada/creada a Supabase sin re-subir el resto del listado
+  Future<void> _pushSingleOrderByIdIfOnline(String orderId) async {
+    if (!SupabaseConfig.isConfigured) return;
+    final storage = ref.read(localStorageProvider);
+    if (storage.getDeletedIds().contains(orderId)) return;
+
+    final order = state.where((o) => o.id == orderId).firstOrNull;
+    if (order == null) return;
+
+    final pushed = await SupabaseSyncService.syncWorkOrdersToCloud(
+      [order],
+      deletedIds: storage.getDeletedIds(),
+    );
+    if (pushed != null && pushed.isNotEmpty) {
+      final syncedOrder = pushed.first;
+      final latestDeleted = storage.getDeletedIds();
+      if (latestDeleted.contains(orderId)) return;
+
+      await storage.removeSyncItemsByEntityId(orderId);
+      ref.read(syncQueueProvider.notifier).refreshQueue();
+
+      final updatedList = state.map((o) => o.id == orderId ? syncedOrder : o).toList();
+      state = updatedList;
+      await storage.saveWorkOrders(updatedList);
     }
   }
 
   // Crear nueva orden de trabajo desde el panel de administración o desde reporte en planta
   Future<void> createWorkOrder(WorkOrderModel order) async {
     final storage = ref.read(localStorageProvider);
+    await storage.removeDeletedId(order.id);
 
-    final current = List<WorkOrderModel>.from(state)..insert(0, order);
+    final pendingOrder = order.copyWith(syncStatus: SyncStatus.pendingSync);
+    final current = List<WorkOrderModel>.from(state)..insert(0, pendingOrder);
     state = current;
     await storage.saveWorkOrders(current);
 
@@ -414,7 +465,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           description: 'Nueva OT creada: ${order.orderNumber}',
         );
 
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(order.id);
   }
 
   // Modificar orden de trabajo existente
@@ -423,7 +474,10 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
     final current = List<WorkOrderModel>.from(state);
     final idx = current.indexWhere((o) => o.id == order.id);
     if (idx >= 0) {
-      current[idx] = order.copyWith(updatedAt: DateTime.now());
+      current[idx] = order.copyWith(
+        syncStatus: SyncStatus.pendingSync,
+        updatedAt: DateTime.now(),
+      );
       state = current;
       await storage.saveWorkOrders(current);
       await ref.read(syncQueueProvider.notifier).enqueue(
@@ -431,17 +485,21 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
             actionType: SyncActionType.statusChange,
             description: 'OT actualizada: ${order.orderNumber}',
           );
-      await _pushToCloudIfOnline();
+      await _pushSingleOrderByIdIfOnline(order.id);
     }
   }
 
   // Eliminar orden de trabajo
   Future<void> deleteWorkOrder(String orderId) async {
     final storage = ref.read(localStorageProvider);
+    await storage.addDeletedId(orderId);
+    await storage.removeSyncItemsByEntityId(orderId);
+    ref.read(syncQueueProvider.notifier).refreshQueue();
+
     final current = state.where((o) => o.id != orderId).toList();
     state = current;
     await storage.saveWorkOrders(current);
-    if (SupabaseConfig.isConfigured && ref.read(isOnlineStateProvider)) {
+    if (SupabaseConfig.isConfigured) {
       await SupabaseSyncService.deleteWorkOrderFromCloud(orderId);
     }
   }
@@ -471,7 +529,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.statusChange,
           description: 'OT iniciada por el técnico',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Pausar ejecución de OT
@@ -499,7 +557,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.statusChange,
           description: 'OT pausada: $reason',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Reanudar OT pausada
@@ -527,7 +585,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.statusChange,
           description: 'OT reanudada',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Alternar tarea de checklist (booleana)
@@ -561,7 +619,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Checklist actualizado en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Registrar medición numérica en checklist
@@ -604,7 +662,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Medición registrada: $value en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Registrar foto en paso de checklist específico (soporta 1 o múltiples fotos)
@@ -649,7 +707,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto registrada en paso de OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Eliminar una foto específica de un paso de checklist multi-foto
@@ -691,7 +749,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto eliminada en paso de OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Alternar opción en paso de selección múltiple (MaintainX Multiple Choice)
@@ -733,7 +791,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Selección múltiple actualizada en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Registrar foto antes/después en paso específico
@@ -780,7 +838,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto Antes/Después actualizada en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Registrar observación / texto en paso
@@ -816,7 +874,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Observación actualizada en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Registrar selección única en paso
@@ -852,7 +910,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Selección actualizada en OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Adjuntar foto de evidencia (URL o Base64) a la orden
@@ -880,7 +938,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto de evidencia adjuntada a OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Eliminar foto de evidencia de una orden
@@ -910,7 +968,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.checklistUpdate,
           description: 'Foto de evidencia eliminada de OT',
         );
-    await _pushToCloudIfOnline();
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 
   // Actualizar lista en memoria y local storage (post-sincronización en la nube)
@@ -955,6 +1013,7 @@ class WorkOrdersNotifier extends Notifier<List<WorkOrderModel>> {
           actionType: SyncActionType.completionSignature,
           description: 'OT finalizada y firmada',
         );
+    await _pushSingleOrderByIdIfOnline(orderId);
   }
 }
 
@@ -1142,11 +1201,12 @@ class UsersNotifier extends Notifier<List<UserModel>> {
 
   Future<void> deleteUser(String userId) async {
     final storage = ref.read(localStorageProvider);
+    await storage.addDeletedId(userId);
     final current = state.where((u) => u.id != userId).toList();
     state = current;
     await storage.saveUsers(current);
-    if (SupabaseConfig.isConfigured && ref.read(isOnlineStateProvider)) {
-      await SupabaseSyncService.syncUsersToCloud(current);
+    if (SupabaseConfig.isConfigured) {
+      await SupabaseSyncService.deleteUserFromCloud(userId);
     }
   }
 }
@@ -1170,6 +1230,7 @@ class CrewsNotifier extends Notifier<List<CrewModel>> {
 
   Future<void> addCrew(CrewModel crew) async {
     final storage = ref.read(localStorageProvider);
+    await storage.removeDeletedId(crew.id);
     final current = List<CrewModel>.from(state)..add(crew);
     state = current;
     await storage.saveCrews(current);
@@ -1194,11 +1255,12 @@ class CrewsNotifier extends Notifier<List<CrewModel>> {
 
   Future<void> deleteCrew(String crewId) async {
     final storage = ref.read(localStorageProvider);
+    await storage.addDeletedId(crewId);
     final current = state.where((c) => c.id != crewId).toList();
     state = current;
     await storage.saveCrews(current);
-    if (SupabaseConfig.isConfigured && ref.read(isOnlineStateProvider)) {
-      await SupabaseSyncService.syncCrewsToCloud(current);
+    if (SupabaseConfig.isConfigured) {
+      await SupabaseSyncService.deleteCrewFromCloud(crewId);
     }
   }
 
@@ -1263,6 +1325,8 @@ class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
   }
 
   void addOrUpdateTemplate(TaskTemplateModel template) {
+    final storage = ref.read(localStorageProvider);
+    storage.removeDeletedId(template.id);
     final current = List<TaskTemplateModel>.from(state);
     final idx = current.indexWhere((t) => t.id == template.id);
     if (idx >= 0) {
@@ -1273,9 +1337,15 @@ class TaskTemplatesNotifier extends Notifier<List<TaskTemplateModel>> {
     _persistTemplates(current);
   }
 
-  void deleteTemplate(String id) {
+  Future<void> deleteTemplate(String id) async {
+    final storage = ref.read(localStorageProvider);
+    await storage.addDeletedId(id);
     final updated = state.where((t) => t.id != id).toList();
-    _persistTemplates(updated);
+    state = updated;
+    await storage.saveTaskTemplates(updated);
+    if (SupabaseConfig.isConfigured) {
+      await SupabaseSyncService.deleteTemplateFromCloud(id);
+    }
   }
 
   void addStageToTemplate(String templateId, WorkflowStageModel stage) {

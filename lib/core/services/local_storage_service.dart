@@ -20,6 +20,8 @@ class LocalStorageService {
   static const String _keyCrews = 'maxi_crews_v1';
   static const String _keyStockMovements = 'maxi_stock_movements_v1';
   static const String _keyTaskTemplates = 'maxi_task_templates_v1';
+  static const String _keyDeletedIds = 'maxi_deleted_ids_v1';
+  static const String _keyShowcaseSeeded = 'maxi_showcase_v2_seeded';
 
   final SharedPreferences _prefs;
 
@@ -34,16 +36,20 @@ class LocalStorageService {
 
   Future<void> _seedInitialDataIfNeeded() async {
     final initialOrders = MockDataService.getInitialWorkOrders();
+    final showcaseAlreadySeeded = _prefs.getBool(_keyShowcaseSeeded) ?? false;
+
     if (!_prefs.containsKey(_keyWorkOrders)) {
       await saveWorkOrders(initialOrders);
-    } else {
-      // Asegurar que la Tarea Demo Completa ('wo-showcase-2026') esté presente incluso si ya había datos guardados
+      await _prefs.setBool(_keyShowcaseSeeded, true);
+    } else if (!showcaseAlreadySeeded) {
+      // Sembrar por única vez la Tarea Demo Completa ('wo-showcase-2026') si no fue sembrada antes
       final existing = getWorkOrders();
       final showcaseOrder = initialOrders.where((o) => o.id == 'wo-showcase-2026').firstOrNull;
       if (showcaseOrder != null && !existing.any((o) => o.id == 'wo-showcase-2026')) {
         existing.insert(0, showcaseOrder);
         await saveWorkOrders(existing);
       }
+      await _prefs.setBool(_keyShowcaseSeeded, true);
     }
     if (!_prefs.containsKey(_keyAssets)) {
       final initialAssets = MockDataService.getAssets();
@@ -85,19 +91,30 @@ class LocalStorageService {
     final defaultTemplates = TaskTemplateModel.getDefaultTemplates();
     if (!_prefs.containsKey(_keyTaskTemplates)) {
       await saveTaskTemplates(defaultTemplates);
-    } else {
+    } else if (!showcaseAlreadySeeded) {
       final existingTemplates = getTaskTemplates();
       final showcaseTpl = defaultTemplates.where((t) => t.id == 'tpl-maintainx-multistage').firstOrNull;
-      if (showcaseTpl != null) {
-        final idx = existingTemplates.indexWhere((t) => t.id == 'tpl-maintainx-multistage');
-        if (idx >= 0) {
-          existingTemplates[idx] = showcaseTpl;
-        } else {
-          existingTemplates.insert(0, showcaseTpl);
-        }
+      if (showcaseTpl != null && !existingTemplates.any((t) => t.id == 'tpl-maintainx-multistage')) {
+        existingTemplates.insert(0, showcaseTpl);
         await saveTaskTemplates(existingTemplates);
       }
     }
+  }
+
+  // --- Registro de IDs Eliminados (Tombstones para evitar resurrección en sync) ---
+  Set<String> getDeletedIds() {
+    final list = _prefs.getStringList(_keyDeletedIds);
+    return list != null ? list.toSet() : <String>{};
+  }
+
+  Future<void> addDeletedId(String id) async {
+    final current = getDeletedIds()..add(id);
+    await _prefs.setStringList(_keyDeletedIds, current.toList());
+  }
+
+  Future<void> removeDeletedId(String id) async {
+    final current = getDeletedIds()..remove(id);
+    await _prefs.setStringList(_keyDeletedIds, current.toList());
   }
 
   // --- Órdenes de Trabajo ---
@@ -105,8 +122,12 @@ class LocalStorageService {
     final rawJson = _prefs.getString(_keyWorkOrders);
     if (rawJson == null) return [];
     try {
+      final deleted = getDeletedIds();
       final List<dynamic> decoded = jsonDecode(rawJson) as List<dynamic>;
-      return decoded.map((e) => WorkOrderModel.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => WorkOrderModel.fromMap(e as Map<String, dynamic>))
+          .where((o) => !deleted.contains(o.id))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -159,8 +180,12 @@ class LocalStorageService {
     final rawJson = _prefs.getString(_keySpareParts);
     if (rawJson == null) return [];
     try {
+      final deleted = getDeletedIds();
       final List<dynamic> decoded = jsonDecode(rawJson) as List<dynamic>;
-      return decoded.map((e) => SparePartModel.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => SparePartModel.fromMap(e as Map<String, dynamic>))
+          .where((p) => !deleted.contains(p.id))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -200,6 +225,12 @@ class LocalStorageService {
     await saveSyncQueue(current);
   }
 
+  Future<void> removeSyncItemsByEntityId(String entityId) async {
+    final current = getSyncQueue();
+    current.removeWhere((e) => e.entityId == entityId);
+    await saveSyncQueue(current);
+  }
+
   Future<void> clearSyncQueue() async {
     await _prefs.remove(_keySyncQueue);
   }
@@ -233,8 +264,12 @@ class LocalStorageService {
     final raw = _prefs.getString(_keyUsers);
     if (raw == null) return [];
     try {
+      final deleted = getDeletedIds();
       final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded.map((e) => UserModel.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => UserModel.fromMap(e as Map<String, dynamic>))
+          .where((u) => !deleted.contains(u.id))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -250,8 +285,12 @@ class LocalStorageService {
     final raw = _prefs.getString(_keyCrews);
     if (raw == null) return [];
     try {
+      final deleted = getDeletedIds();
       final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded.map((e) => CrewModel.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => CrewModel.fromMap(e as Map<String, dynamic>))
+          .where((c) => !deleted.contains(c.id))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -281,14 +320,23 @@ class LocalStorageService {
 
   // --- Plantillas y Protocolos Técnicos Maestros ---
   List<TaskTemplateModel> getTaskTemplates() {
+    final deleted = getDeletedIds();
     final raw = _prefs.getString(_keyTaskTemplates);
-    if (raw == null) return TaskTemplateModel.getDefaultTemplates();
+    if (raw == null) {
+      return TaskTemplateModel.getDefaultTemplates()
+          .where((t) => !deleted.contains(t.id))
+          .toList();
+    }
     try {
       final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
-      final list = decoded.map((e) => TaskTemplateModel.fromMap(e as Map<String, dynamic>)).toList();
-      return list.isNotEmpty ? list : TaskTemplateModel.getDefaultTemplates();
+      return decoded
+          .map((e) => TaskTemplateModel.fromMap(e as Map<String, dynamic>))
+          .where((t) => !deleted.contains(t.id))
+          .toList();
     } catch (_) {
-      return TaskTemplateModel.getDefaultTemplates();
+      return TaskTemplateModel.getDefaultTemplates()
+          .where((t) => !deleted.contains(t.id))
+          .toList();
     }
   }
 

@@ -18,10 +18,8 @@ class ConnectivityService {
 
   void _init() {
     _connectivity.onConnectivityChanged.listen((results) {
-      final hasConnection = results.any((result) =>
-          result == ConnectivityResult.wifi ||
-          result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.ethernet);
+      final hasConnection = results.isNotEmpty &&
+          !results.every((result) => result == ConnectivityResult.none);
       _currentStatus = hasConnection;
       _emit();
     });
